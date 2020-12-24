@@ -103,4 +103,30 @@ df_pred$prediction = factor(ifelse(df_pred < .5, 0, 1))
 confusionMatrix(df_pred$prediction,df_test$wins)
 
 
+
+
+
+## ---- validate with 2017-2018 data ---- ##
+## get SAT data sorted by game (home team only)
+
+## get SAT data sorted by game (home team only)
+print(load("1224_nhl_home_sat_stats_2017-2018.rsav"))
+sat_df = df_cleaned[,c("team", "game", "shots", "sat_for", "sat_against","sat")]
+
+
+## get basic game stats also sorted game
+print(load("1224_nhl_home_summary_stats_2017-2018.rsav"))
+basic_df = df_cleaned[,c("game", "wins", "losses", "points", "goal_for", "goal_against", "shots_over_gp", "sa_over_gp")]
+
+
+## combine and add CF% (cfp)
+df = merge(sat_df, basic_df, by="game")
+df[,3:13] = sapply(df[,3:13], as.numeric)
+df$points = as.character(df$points)
+df$wins = as.character(df$wins)
+df$cfp = df$sat_for / (df$sat_for + df$sat_against)
+df$sp = df$shots_over_gp / (df$shots_over_gp + df$sa_over_gp)
+
+tapply(df$cfp, df$wins, summary)
+
 #end

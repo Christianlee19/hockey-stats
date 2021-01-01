@@ -3,7 +3,7 @@ library(ggplot2)
 library(ggrepel)
 library(ggpubr)
 
-setwd("~/Documents/stats//Hockey_stats/")
+setwd("~/Documents/hockey-stats/data/")
 df = read.csv("2018_corsi_team.csv", header=T, stringsAsFactors = F)
 colnames(df)[c(3,9)] = c("wins","cfp")
 

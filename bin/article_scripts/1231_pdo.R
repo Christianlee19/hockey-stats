@@ -68,6 +68,8 @@ gc()
 
 
 
+
+
 ## --------------------
 ## ---- analyze ---- ##
 library(ggplot2)
@@ -105,5 +107,36 @@ ggplot(df2, aes(x=Game, y=pdo, color=Player)) +
 
 
 
-## 
+
+## -------------------------------
+## ---- player summary PDO ---- ##
+## load adv stats from: https://www.hockey-reference.com/leagues/NHL_2020_skaters-advanced.html
+pdo = read.csv("adv_hockey_stats.csv", header=T, skip=1, stringsAsFactors=F)
+colnames(pdo)[2] = "name"
+
+
+## keep unique and clean
+pdo = pdo[!duplicated(pdo$name),]
+pdo$name = gsub("\\\\.*","",pdo$name)
+
+
+## keep players with more than 20 games
+pdo = pdo[pdo$GP >= 20,]
+
+
+## plot
+ggplot(pdo, aes(x=PDO)) +
+  geom_histogram(aes(y=..density..),fill="#396591", alpha=.65, color="dodgerblue4") + 
+  geom_density(fill="#396591", alpha=.50, color = "dodgerblue4", size=1) +
+  geom_vline(xintercept = 100, color="gray25", alpha=.5, linetype="dashed", size=.75) +
+  
+  ## add ons
+  labs(title="NHL skater PDO", subtitle="2019-2020 regular season\nn = 670 skaters",
+       x="PDO",y="Density") + 
+  theme_bw() +
+  theme(axis.text=element_text(size=10),
+        title=element_text(size=12))
+
+
+
 

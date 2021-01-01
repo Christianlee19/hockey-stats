@@ -19,7 +19,7 @@ df = read_html(src) %>%
 
 
 ## -----------------------------------------------------------------------------
-for (i in 2:48) {
+for (i in 2:26) {
   cat(paste0(i, ": "))
   pages = remDr$findElement(using = "css selector",".-next") #we are selecting the next button
   pages$clickElement()  

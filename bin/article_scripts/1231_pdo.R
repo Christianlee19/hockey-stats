@@ -3,7 +3,7 @@ library(RSelenium)
 library(rvest)
 library(dplyr)
 
-url = "http://www.nhl.com/stats/teams?aggregate=0&report=percentages&reportType=game&seasonFrom=20182019&seasonTo=20192020&dateFromSeason&gameType=2&filter=gamesPlayed,gte,1&sort=a_gameDate&page=0&pageSize=100"
+url = "http://www.nhl.com/stats/teams?aggregate=0&report=percentages&reportType=game&seasonFrom=20182019&seasonTo=20182019&dateFromSeason&gameType=2&filter=gamesPlayed,gte,1&sort=a_gameDate&page=0&pageSize=100"
 rD = rsDriver(port=4444L, browser="chrome", chromever="87.0.4280.88") #specify whichever version of chrome you are using
 remDr = rD[['client']]
 remDr$navigate(url) #this will open a chrome window (that means it is working)

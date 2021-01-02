@@ -74,6 +74,7 @@ gc()
 ## ---- analyze ---- ##
 library(ggplot2)
 library(zoo)
+library(RColorBrewer)
 
 print(load("~/Documents/hockey-stats/data/1231_team_game_pdo_2018-2019.rsav"))
 dim(df2)
@@ -81,28 +82,47 @@ dim(df2)
 ## remove unregistered pdo
 colnames(df2)[23] = "pdo"
 df2 = df2[df2$pdo != "--",]
+df2$pdo = as.numeric(df2$pdo)
 dim(df2)
 
-df2$pdo = as.numeric(df2$pdo)
 df2$game_date = as.POSIXlt(gsub("(.+)vs(.+)", "\\1", df2$Game), format="%Y/%m/%d")
+df2 = df2[order(df2$game_date),]
 
-test = df2[df2$Player == "John Tavares",]
-rollmean(test$pdo)
 
-aggregate(list(temperature = df2$temperature), 
-          list(hourofday = cut(df2$game_date)), 
-          mean)
-#             hourofday temperature
-# 1 2007-09-29 00:00:00   -1.744333
-# 2 2007-09-29 01:00:00   -1.586000
-# 3 2007-09-29 02:00:00   -1.751667
-# 4 2007-09-29 03:00:00   -1.820000
+moving_avg = function(i, dfss) {
+  x = dfss[1:i,,drop=F]
+  val = mean(x$pdo)
+  team = unique(x$Team)
+  return(c(team, i, val))
+}
 
-ggplot(df2, aes(x=Game, y=pdo, color=Player)) +
-  geom_point() +
+res = do.call(rbind, lapply(unique(df2$Team), function(team){
+  dfss = df2[df2$Team == team,]
+  temp = data.frame(do.call(rbind, lapply(1:nrow(dfss), moving_avg, dfss)), stringsAsFactors = F)
+  return(temp)
+}))
+
+colnames(res) = c("team", "gp", "avg_pdo")
+res$avg_pdo = as.numeric(res$avg_pdo)
+res$gp = factor(res$gp, levels=as.character(seq(1,82,1)))
+
+teams_to_color = c("Nashville Predators","Anaheim Ducks","New York Islanders","Tampa Bay Lightning",
+                   "Vegas Golden Knights","Detroit Red Wings","San Jose Sharks")
+team_colors = brewer.pal(7, "Dark2")
+names(team_colors) = teams_to_color
+
+
+ggplot(res, aes(x=gp, y=avg_pdo, group=team)) +
+  geom_line(color="gray40", alpha=.65) +
+  geom_line(data=res[res$team %in% teams_to_color,], aes(color=team),
+            size=1) +
+  labs(title="NHL team PDO", subtitle="2018-2019 regular season\nn = 31 teams",
+       x="Games played",y="PDO average",color="Select team") + 
+  scale_x_discrete(breaks=as.character(seq(0,82,4))) +
+  scale_color_manual(values = team_colors) +
   theme_bw() +
-  theme(axis.text.x = element_blank())
-
+  theme(axis.text=element_text(size=10),
+        title=element_text(size=12))
 
 
 

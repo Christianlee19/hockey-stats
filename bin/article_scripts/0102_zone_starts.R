@@ -15,12 +15,12 @@ src = remDr$getPageSource()[[1]] #we are just selecting everything for now
 df = read_html(src) %>% 
   xml_nodes(css="div[role='gridcell']") %>%
   xml_text() %>%
-  matrix(.,ncol=23, byrow = T) %>%
+  matrix(.,ncol=18, byrow = T) %>%
   data.frame(.,stringsAsFactors = F)
 
 
 ## -----------------------------------------------------------------------------
-for (i in 2:26) {
+for (i in 2:13) {
   cat(paste0(i, ": "))
   pages = remDr$findElement(using = "css selector",".-next") #we are selecting the next button
   pages$clickElement()  
@@ -32,7 +32,7 @@ for (i in 2:26) {
   temp = read_html(src) %>% 
     xml_nodes(css="div[role='gridcell']") %>%
     xml_text() %>%
-    matrix(., ncol=23, byrow = T) %>%
+    matrix(., ncol=18, byrow = T) %>%
     data.frame(., stringsAsFactors = F)
   print(dim(temp))
   
@@ -43,7 +43,7 @@ for (i in 2:26) {
 
 
 ## remove empty rows and let's just keep the first 12 columns
-df2 = df[nchar(df$X2) > 1, 1:23] #the blank rows have a space (1)
+df2 = df[nchar(df$X2) > 1, 1:18] #the blank rows have a space (1)
 dim(df2)
 #
 
@@ -59,7 +59,7 @@ colnames(df2) = header
 
 
 ## save file
-save(df2, file = "~/Documents/hockey-stats/data/1231_team_game_pdo_2018-2019.rsav")
+save(df2, file = "~/Documents/hockey-stats/data/0102_team_game_zone_starts_2018-2019.rsav")
 
 
 ## close

@@ -3,6 +3,11 @@ library(caTools)
 library(rpart)            #for single regression tree
 library(rpart.plot)       #to viz regression tree
 library(cowplot)          #to combine plots
+library(dplyr)
+library(data.table)
+library(ggplot2)
+
+setwd("~/Documents/hockey-stats/data/")
 
 ## load data
 print(load("rf_data.rsav"))
@@ -15,12 +20,13 @@ df3$win = as.factor(df3$win)
 
 
 ## impute missing data
-df3_imp = rfImpute(df3[,c(1:ncol(df3)-1)], y=df3$win)
-colnames(df3_imp)[1] = "win"
-save(df3_imp, file = "rfImp_data.rsav")
+#df3_imp = rfImpute(df3[,c(1:ncol(df3)-1)], y=df3$win)
+#colnames(df3_imp)[1] = "win"
+#save(df3_imp, file = "rfImp_data.rsav")
 
 ## split into testing and training
 set.seed(1234) 
+print(load("rfImp_data.rsav"))
 sample = sample.split(df3_imp, SplitRatio = .80)
 
 train = subset(df3_imp, sample == TRUE)
@@ -42,8 +48,8 @@ rpart.plot(m1)
 
 
 ## -- run RF with multiple mtry -- ##
-oob_values = vector(length=15)
-for(i in 1:15) {
+oob_values = vector(length=20)
+for(i in 1:20) {
   print(i)
   temp_mod = randomForest(win ~ ., data=train, 
                            mtry=i, ntree=500, 
@@ -64,17 +70,20 @@ model = randomForest(win ~ .,
                       proximity=TRUE, 
                       importance=TRUE,
                       na.action = na.roughfix,
-                      mtry=which(oob_values == min(oob_values)))
+                      mtry=17)
 
 model
-
+# Confusion matrix:
+#   loss  win class.error
+# loss 1686  758   0.3101473
+# win   755 1784   0.2973612
 
 
 ## -- plot confusion matrix -- ##
 ## how is this created (from oob?)
 cm = data.frame(model$confusion)
 cm = setDT(data.frame(model$confusion)) %>%
-      melt(.,measure.vars=c("loss","win"))
+      data.table::melt(.,measure.vars=c("loss","win"))
 cm$true_labels = c("loss","win","loss","win")
 cm$variable = factor(cm$variable, levels=c("loss","win"))
 cm$true_labels = factor(cm$true_labels, levels=c("win","loss"))
@@ -158,6 +167,54 @@ p3 = ggplot(mod_importance, aes(x=MeanDecreaseGini, y=feature)) +
 
 plot_grid(p2, p3, labels = c('A', 'B'))
 
+
+
+
+
+
+
+
+## -- shap scores with Python -- ##
+## adapted from O. Ocensas
+library(randomForest)
+library(reticulate)
+shap = import("shap")
+sklearn_ensemble=import("sklearn.ensemble")
+plt = import('matplotlib.pyplot')
+
+
+input=data.matrix(train[,2:52])
+output=as.numeric(train[,1])
+
+# set up model and hyperparameters
+model = sklearn_ensemble$RandomForestRegressor(n_estimators=1000L, 
+                                               bootstrap = T,
+                                               max_features = 17L,
+                                               oob_score=T)
+# train model
+model$fit(input, output)
+
+# set up SHAP for model
+explainer=shap$TreeExplainer(model)
+
+# get SHAP values for each observation
+shap_values=as.data.table(explainer$shap_values(input))
+colnames(shap_values)=colnames(input)                                                      
+save(shap_values, file = "0322_shap_values.rsav")                                                                 
+
+
+## get plot
+shap$summary_plot(data.matrix(shap_values), input, show=F)
+plt$savefig("figures/0322_shap_plots.pdf",bbox_inches = "tight")
+plt$clf()
+
+
+shap$dependence_plot("SKCM TCGA-EB-A5KH", data.matrix(shap_values), input)
+plt$savefig("/.mounts/labs/reimandlab/private/users/oocsenas/ATACSEQ_MUT_THESIS/Random_Forest/data/180620/SHAP_test2.pdf",bbox_inches = "tight")
+plt$clf()
+shap$summary_plot(data.matrix(shap_values),input,show=F,plot_type="bar")
+plt$savefig("/.mounts/labs/reimandlab/private/users/oocsenas/ATACSEQ_MUT_THESIS/Random_Forest/data/180620/SHAP_test_3.pdf",bbox_inches = "tight")
+plt$clf()
 
 
 

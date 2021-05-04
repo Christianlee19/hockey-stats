@@ -1,5 +1,6 @@
 library(ggplot2)
 library(data.table)
+library(RColorBrewer)
 
 setwd("~/Documents/hockey-stats/data/")
 
@@ -23,14 +24,24 @@ str(df)
 df = df[nchar(df$Season) > 3,]
 
 
-## assign colours to years
+## assign numeric index for x-axis
 setDT(df)[,season_num:= .GRP,by="Season"]
 df$season_num = as.numeric(df$season_num)
+
+
+## assign colours to years by first three digits
+df$season_3_digits = gsub("([0-9]{3})[0-9]-[0-9]{2}", "\\1", df$Season)
+
+season_colours = brewer.pal(n = 12, "Paired")
+season_colours[11:12] = c("#f0cf2e","#bd9e04")
+colour_df = data.frame(cbind("digits"=unique(df$season_3_digits), colours=season_colours), stringsAsFactors =F)
+df$season_colour = colour_df$colours[match(df$season_3_digits, colour_df$digits)]
+
+
 
 ####
 ## plots
 ####
-
 
 ## ---- GF/GP and GA/GP
 df$Season = factor(df$Season, levels=unique(df$Season))
@@ -38,16 +49,17 @@ xbreaks = seq(1, length(unique(df$Season)), 2)
 xlabels = unique(df$Season)[c(TRUE, FALSE)]
  
 p1 = ggplot(df, aes(x=season_num, y=GF/GP)) +
-      geom_point(size=1) +
-      geom_smooth(alpha=.5) +
+      geom_point(aes(colour=season_colour), size=1) +
+      geom_smooth(alpha=.5, se=F) +
       labs(title = "Goals For / Games Played Across NHL Seasons",
            x = "Season", y="GF/GP") +
+      scale_colour_identity() +
       scale_x_continuous(breaks = xbreaks,
                          labels = xlabels,
                          expand = c(.01,0)) +
       theme_bw() +
       theme(axis.text.y = element_text(size=11),
-            axis.text.x = element_text(size=9, angle=90, hjust=.5, vjust=.5),
+            axis.text.x = element_text(size=8.5, angle=90, hjust=.5, vjust=.5),
             legend.position="none")
 p1
 

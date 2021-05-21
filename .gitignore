@@ -4,3 +4,5 @@
 .Ruserdata
 data/figures
 .DS_Store
+bin/.DS_Store
+data/.DS_Store

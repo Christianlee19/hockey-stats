@@ -97,14 +97,14 @@ src = remDr$getPageSource()[[1]]
 df = read_html(src) %>% 
   xml_nodes(xpath='//*[contains(concat( " ", @class, " " ), concat( " ", "rt-td", " " ))]') %>%
   xml_text() %>%
-  matrix(.,ncol=23, byrow = T) %>%
+  matrix(.,ncol=25, byrow = T) %>%
   data.frame(.,stringsAsFactors = F)
 
 
 ## At our url, there are 26 pages if viewing 50 rows at a time.
 ## We are starting at 2 because 1 was already done before.
 ## We will be adding to that data frame so we don't have to define an empty one.
-for (i in 2:74) {
+for (i in 2:10) {
   print(i)
   pages = remDr$findElement(using = "css selector",".-next") #we are selecting the next button
   pages$clickElement()  
@@ -116,7 +116,7 @@ for (i in 2:74) {
   temp = read_html(src) %>% 
     xml_nodes(xpath='//*[contains(concat( " ", @class, " " ), concat( " ", "rt-td", " " ))]') %>%
     xml_text() %>%
-    matrix(., ncol=23, byrow = T) %>%
+    matrix(., ncol=25, byrow = T) %>%
     data.frame(., stringsAsFactors = F)
   
   ## bind new data
@@ -135,7 +135,7 @@ colnames(df) = header
 ## remove index column
 df = df[,-1]
 dim(df)
-#[1] 7400   22
+#[1] 1000   24
 
 
 ## save file

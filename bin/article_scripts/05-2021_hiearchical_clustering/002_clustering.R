@@ -201,8 +201,7 @@ df = df[,c(1,5,6:10,14,16,18,21)]
 
 ## make columns of interest numeric
 df[3:ncol(df)] = sapply(df[3:ncol(df)], as.numeric)
-df$plus_minus = as.numeric(gsub("+|-", "", df$`+/-`))
-df$`+/-` = NULL
+colnames(df)[7] = "Plus_minus"
 
 ## remove any rows missing date and players with < 50 games
 df = df[nchar(df$Player) > 3 & df$GP >= 25,,drop=F]

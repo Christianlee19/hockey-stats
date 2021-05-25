@@ -210,7 +210,6 @@ df = df[nchar(df$Player) > 3 & df$GP >= 25,,drop=F]
 df[,4:ncol(df)] = df[,4:ncol(df)] / df[,3]
 colnames(df)[4:ncol(df)] = paste0(colnames(df)[4:ncol(df)], "_GP")
 df = df[order(df$P_GP, decreasing = T),,drop=F]
-#df[,3:6] = scale(df[,3:6])
 
 ## final prep
 df2 = df[-3]
@@ -220,7 +219,7 @@ df2$Player = NULL
 dim(df2)
 
 
-set.seed(125)
+set.seed(130)
 
 ## keep a max num of players for viz purposes
 column_ha = columnAnnotation(Pos = df2$Pos[1:100], annotation_name_gp = gpar(fontsize = 8))
@@ -239,7 +238,7 @@ hc1 = hclust(d, method = "ward.D" )
 
 df3 = as.matrix(t(df2))
 p4 = Heatmap(df3, name = "Scaled metric / GP", row_dend_side = "right", column_dend_side = "bottom",
-        column_names_gp = gpar(fontsize = 8), row_names_gp = gpar(fontsize = 8),
+        column_names_gp = gpar(fontsize = 7.25), row_names_gp = gpar(fontsize = 8),
         column_dend_height = unit(4, "cm"),
         clustering_method_rows = "ward.D",
         clustering_method_columns = "ward.D",

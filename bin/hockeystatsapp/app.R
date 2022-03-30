@@ -34,6 +34,24 @@ active_team_rosters_list = nhl_teams_rosters() %>%
   do.call(c,.) %>%
   setNames(active_team_roster_team_info$name)
 
+get_active_player_data = function(team_name, list_of_df){
+  temp_df = list_of_df[[team_name]]
+  temp_df$team_name = team_name
+  temp_df = temp_df[,c("person.fullName", "person.id", "position.abbreviation", "team_name")]
+  return(temp_df)
+}
+
+full_active_player_list = do.call(rbind, lapply(names(active_team_rosters_list), get_active_player_data, list_of_df=active_team_rosters_list))
+#dim(full_active_player_list)
+#[1] 832   4
+
+
+
+#### player data ####
+test = nhl_players_seasons("Sidney Crosby", seasons = "20202021", playerIds = NULL) %>%
+  select(-c(url, copyright))
+
+
 
 #### team data ####
 team_data = nhl_standings(
@@ -86,6 +104,14 @@ server = function(input, output) {
   
   
   
+  #### Total player stats ####
+  
+  
+  
+  
+  
+  
+  
   #### Total team stats ####
   tts_x_us = reactive({input$total_team_stats_x_user_selected})
   tts_y_us = reactive({input$total_team_stats_y_user_selected})
@@ -130,22 +156,6 @@ server = function(input, output) {
   )
 
 
-  output$teamPlot2 <- renderPlotly({
-  ggplotly(
-    ggplot(data=df, aes(x=gamesPlayed, y=points, group=team.name,
-          text=paste0(team.name, "\nGoals for = ", gamesPlayed, "\nGoals against = ", points))) +
-    geom_point(aes(color=pointsPercentage), size=3) +
-    scale_color_continuous(low="darkred", high="red", guide="legend") +
-    geom_abline(intercept = 0, slope = 1, alpha=.35, linetype="dashed", lwd = .5) +
-    theme_bw() +
-    labs(x = "Games Played", y="Points") +
-    theme(title = element_text(size=14),
-          axis.text = element_text(size=11),
-          axis.title = element_text(size=13)),
-  tooltip = "text")
-  }
-)
- 
 # output$teamPlot = renderHighchart({
 #   hchart(df, "scatter", hcaes(x=goalsScored, y=goalsAgainst, group=team.name)),
 #   hc_add_series(fit, type = "line", hcaes(x = carat, y = .fitted),
@@ -162,13 +172,16 @@ server = function(input, output) {
 ## ------------------------------------------------------------------------------------------------------------------------------
 ui = fluidPage(
   navbarPage("Hockey Stats",
-             tabPanel("Player Stats",
-                      titlePanel(h3("placeholder", align = "center"))),
+             navbarMenu("Player Stats",
+                        tabPanel("Season Totals",
+                          titlePanel(h3("placeholder", align = "center"))),
+                        tabPanel("Per game",
+                                  "Coming soon.")),
              
               navbarMenu("Team Stats",
                          tabPanel("Season Totals",
                           fluidRow(
-                            titlePanel(h1("Season Totals", align = "center")),
+                            titlePanel(h1("Live Totals", align = "center")),
                             titlePanel(h3("2020-2021", align = "center")),
                             column(3, 
                               selectInput("total_team_stats_x_user_selected", "X-axis:", choices=team_vars,
@@ -177,11 +190,48 @@ ui = fluidPage(
                                           selected="goalsAgainst")),
                             column(7, plotlyOutput("teamPlot1")),
                             column(2, titlePanel(h3("placeholder", align = "center"))))),
-                         tabPanel("Per game")),
-               navbarMenu("More",
-               tabPanel("Sub-Component A"),
-               tabPanel("Sub-Component B")))
-)
+                         tabPanel("Per game",
+                                  "Coming soon.")),
+             
+               tabPanel("Blog",
+                          fluidRow(
+                            titlePanel(h1("Gallery", align = "center")),
+                            titlePanel(h4(tags$a(href="https://medium.com/hockey-stats", "Making sense of the game."), align = "center")),
+                            br(),
+                            column(4,
+                                   tags$a(img(src = "tommao-wang-6V_HxaF5sd4-unsplash.jpg", height = "100%", width = "100%"),
+                                          href="https://medium.com/hockey-stats/comparing-current-nhl-superstars-with-nhl-all-time-greats-650af0ba0f87"),
+                                   tags$a(h5("Comparing Current NHL Superstars with NHL All-Time Greats", align = "center"),
+                                          href="https://medium.com/hockey-stats/comparing-current-nhl-superstars-with-nhl-all-time-greats-650af0ba0f87")),
+                            column(4,
+                                   tags$a(img(src = "tommao-wang-6V_HxaF5sd4-unsplash.jpg", height = "100%", width = "100%"),
+                                          href="https://medium.com/hockey-stats/comparing-current-nhl-superstars-with-nhl-all-time-greats-650af0ba0f87"),
+                                   tags$a(h5("How has regular season NHL goal scoring changed over time?", align = "center"),
+                                          href="https://medium.com/hockey-stats/comparing-current-nhl-superstars-with-nhl-all-time-greats-650af0ba0f87")),
+                            column(4,
+                                   tags$a(img(src = "tommao-wang-6V_HxaF5sd4-unsplash.jpg", height = "100%", width = "100%"),
+                                          href="https://medium.com/hockey-stats/comparing-current-nhl-superstars-with-nhl-all-time-greats-650af0ba0f87"),
+                                   tags$a(h5("Identifying the Best Predictors of NHL Game Outcomes Using Random Forest", align = "center"),
+                                          href="https://medium.com/hockey-stats/comparing-current-nhl-superstars-with-nhl-all-time-greats-650af0ba0f87"))),
+                        fluidRow(br(),
+                          column(4,
+                                   tags$a(img(src = "tommao-wang-6V_HxaF5sd4-unsplash.jpg", height = "100%", width = "100%"),
+                                          href="https://medium.com/hockey-stats/comparing-current-nhl-superstars-with-nhl-all-time-greats-650af0ba0f87"),
+                                   tags$a(h5("Comparing Current NHL Superstars with NHL All-Time Greats", align = "center"),
+                                          href="https://medium.com/hockey-stats/comparing-current-nhl-superstars-with-nhl-all-time-greats-650af0ba0f87")),
+                            column(4,
+                                   tags$a(img(src = "tommao-wang-6V_HxaF5sd4-unsplash.jpg", height = "100%", width = "100%"),
+                                          href="https://medium.com/hockey-stats/comparing-current-nhl-superstars-with-nhl-all-time-greats-650af0ba0f87"),
+                                   tags$a(h5("How has regular season NHL goal scoring changed over time?", align = "center"),
+                                          href="https://medium.com/hockey-stats/comparing-current-nhl-superstars-with-nhl-all-time-greats-650af0ba0f87")),
+                            column(4,
+                                   tags$a(img(src = "tommao-wang-6V_HxaF5sd4-unsplash.jpg", height = "100%", width = "100%"),
+                                          href="https://medium.com/hockey-stats/comparing-current-nhl-superstars-with-nhl-all-time-greats-650af0ba0f87"),
+                                   tags$a(h5("Identifying the Best Predictors of NHL Game Outcomes Using Random Forest", align = "center"),
+                                          href="https://medium.com/hockey-stats/comparing-current-nhl-superstars-with-nhl-all-time-greats-650af0ba0f87")))
+                        )
+             )
+           )
   
 
 

@@ -11,6 +11,8 @@ library(shiny)
 library(ggplot2)
 library(nhlapi)
 # library(highcharter)
+library(scales)
+library(fmsb)
 library(dplyr)
 library(data.table)
 library(plotly)
@@ -37,19 +39,40 @@ active_team_rosters_list = nhl_teams_rosters() %>%
 get_active_player_data = function(team_name, list_of_df){
   temp_df = list_of_df[[team_name]]
   temp_df$team_name = team_name
-  temp_df = temp_df[,c("person.fullName", "person.id", "position.abbreviation", "team_name")]
+  temp_df = temp_df[,c("person.fullName", "person.id", "position.abbreviation", "position.type", "team_name")]
   return(temp_df)
 }
 
 full_active_player_list = do.call(rbind, lapply(names(active_team_rosters_list), get_active_player_data, list_of_df=active_team_rosters_list))
 #dim(full_active_player_list)
-#[1] 832   4
+#[1] 832   5
 
 
 
 #### player data ####
-test = nhl_players_seasons("Sidney Crosby", seasons = "20202021", playerIds = NULL) %>%
-  select(-c(url, copyright))
+active_player_stats = nhl_players_seasons(playerIds=full_active_player_list$person.id[1:nrow(full_active_player_list)], seasons = "20212022")
+
+## get name by id
+active_player_stats = merge(active_player_stats, full_active_player_list, by.x="playerId", by.y="person.id")
+
+## only keep players with n games
+active_player_stats = active_player_stats[active_player_stats$stat.games > 10,,drop=F]
+
+## get top n players by position
+active_skater_stats = setDT(active_player_stats[active_player_stats$position.type != "Goalie",,drop=F])[order(-rank(stat.points))]
+#test_goalie = setDT(test[test$position.type == "Goalie",,drop=F])[order(-rank(stat.savePercentage))]
+
+# skaters_to_select = unlist(strsplit(active_skater_stats_select$person.fullName, "' '"))
+skaters_to_select = active_skater_stats[,.SD[1:20], by="position.type"]$person.fullName
+save(skaters_to_select, file="~/Documents/hockey-stats/bin/hockeystatsapp/data/skaters_to_select.rds")
+
+skaters_to_select = readRDS("data/skaters_to_select.rds")
+
+## filter player data
+player_data = nhl_players_seasons(playerNames = skaters_to_select, seasons = "20212022") ## maybe replace this with ids
+rownames(player_data) = skaters_to_select
+
+
 
 
 
@@ -105,6 +128,47 @@ server = function(input, output) {
   
   
   #### Total player stats ####
+  test = player_data[1:2,c("stat.points", "stat.goals", "stat.assists",
+                           "stat.powerPlayPoints", "stat.powerPlayGoals",
+                           "stat.shots", "stat.hits")]
+  
+  round_any = function(x, accuracy, f=ceiling){f(x/ accuracy) * accuracy}
+  max_values_rounded = round_any(as.numeric(apply(test, 2, max))*1.1, 10) ## add buffer with *
+  
+  # max_values = round(as.numeric(apply(test, 2, max)), -1)
+  
+  # To use the fmsb package, I have to add 2 lines to the dataframe: the max and min of each variable to show on the plot!
+  test2 = rbind(max_values_rounded, rep(0,ncol(test)), test)
+  
+  # clean column names
+  colnames(test2) = gsub("stat.", "", colnames(test2))
+  colnames(test2) = tolower(gsub("powerPlay", "pp ", colnames(test2)))
+  
+  
+  # set colors
+  colors_border = alpha(c("#d41102", "#08519C"), .5)
+  colors_inner = alpha(colors_border, 0.2)
+  
+  
+  radarchart(test2, axistype = 1,
+             pty = 16,
+             pcol=colors_border,
+             pfcol=colors_inner, 
+             plwd=3,
+             plty=1,
+             cglcol = "gray5", #grid line colors
+             cglty = 1, #line type
+             axislabcol = "black",
+             cglwd=0.25, #line width
+             calcex=.85,
+             vlcex=1.1, #font size magnification
+             vlabels = paste0(colnames(test2), "\n(", max_values_rounded,")")
+  )
+  
+  legend(x=1.1, y=1, legend = rownames(test2[-c(1,2),]),
+         bty = "n", pch=20 , col=colors_border,
+         text.col = "gray25",
+         cex=1, pt.cex=2)
   
   
   

@@ -137,6 +137,16 @@ server = function(input, output) {
   #                                           "stat.shots", "stat.hits")]
   #   return(iris)
   # })
+  
+  
+  ### Total team stats ####
+  # output$sktr_x = renderText({input$sktr_x_user_selected})
+  # output$sktr_y = renderText({input$sktr_y_user_selected})
+  output$sktr_comparison = renderText({
+    x = input$sktr_x_user_selected
+    y = input$sktr_y_user_selected
+    paste0(x, " vs ", y)
+  })
 
   player_data_filtered = reactive({
     sktr_x = as.character(input$sktr_x_user_selected)
@@ -165,7 +175,26 @@ server = function(input, output) {
 
   
   # output table
-  output$table = renderTable({
+  # output$table = renderTable({
+  #   
+  #   data = player_data_filtered()
+  #   char_skater_table_norm = as.character(input$skater_table_norm)
+  #   
+  #   if(char_skater_table_norm == "Per Game"){
+  #     data[,-1] = data[,-1] / data$games
+  #     data
+  #   } else if(char_skater_table_norm == "Per 60"){
+  #     data[,-1] = data[,-1] / data$timeonice * 60
+  #     data
+  #   }
+  #   
+  #   return(data[-1,-1])
+  # }, bordered = T, spacing = "s", rownames=T, striped=T, digits=1
+  # )
+
+  
+  #### lollipop plot ####
+  output$skater_lollipop_plot = renderPlot({
     
     data = player_data_filtered()
     char_skater_table_norm = as.character(input$skater_table_norm)
@@ -178,15 +207,49 @@ server = function(input, output) {
       data
     }
     
-    return(data[-1,-1])
-  }, bordered = T, spacing = "s", rownames=T, striped=T, digits=1
-  )
+    # remove rows that should not be included in plot
+    # data = data[-1,-1]
+    data = data[-1, !colnames(data) %in% c("selection","timeonice")]
+    
+    # transpose
+    data = data.frame(t(data), stringsAsFactors = F)
+    data = cbind(rownames(data), data)
+    colnames(data) = c("var", "Player A", "Player B")
+    
+    # reorder
+    data = data %>%
+      rowwise() %>% 
+      mutate(avg_value = mean(c(`Player A`, `Player B`) )) %>% 
+      arrange(avg_value) %>%
+      mutate(var=factor(var, var)) #set order
+    
 
+    # plot
+    ggplot(data) +
+      geom_point(aes(x=var, y=`Player A`, color="Player A"), alpha=.7, size=5) +
+      geom_point(aes(x=var, y=`Player B`, color="Player B"), alpha=.7, size=5) +
+      geom_segment(
+        aes(x=var, xend=var, y=`Player A`, yend=`Player B`), color="gray40", size=1) +
+      theme_bw() +
+      labs(y = "Value", x="Category") +
+      coord_flip() +
+      scale_colour_manual(name=NULL, values=c(`Player A`="#d41102", `Player B`="#08519C")) +
+      theme(title = element_text(size=11),
+            axis.text = element_text(size=14),
+            axis.title = element_text(size=15),
+            legend.text = element_text(size=13),
+            legend.position = "bottom")
+  })
   
-  #### lollipop plot ####
-  #https://r-graph-gallery.com/303-lollipop-plot-with-2-values.html
-  
-  
+  ggplot(df, aes(x = instance, y = total_hits)) +
+    geom_point(size = 1) + 
+    geom_line()+
+    geom_line(aes(x=instance, y = line1, colour="myline1")) +
+    geom_vline(xintercept=805) + 
+    geom_line(aes(x=instance, y = line2, colour="myline2"))+
+    geom_line(aes(x=instance, y = line3, colour="myline3")) +
+    scale_colour_manual(name="Line Color",
+                        values=c(myline1="red", myline2="blue", myline3="purple"))
   
   #### new radar plot ####
   output$skaterPlot1 = renderPlot({
@@ -288,8 +351,9 @@ ui = fluidPage(
       tabPanel("Season Totals",
         fluidRow(
                titlePanel(h1("Live Totals", align = "center")),
-               titlePanel(h3("2021-2022", align = "center")),
-               column(3,
+               # titlePanel(h3("2021-2022", align = "center")),
+               h4(textOutput("sktr_comparison"), align="center"),
+               column(3, style='padding-top:1em;',
                       selectInput("sktr_x_user_selected", "Player A:", choices=sort(skaters_to_select),
                                   selected="Connor McDavid"),
                       selectInput("sktr_y_user_selected", "Player B:", choices=sort(skaters_to_select),
@@ -300,30 +364,33 @@ ui = fluidPage(
                column(6, plotOutput("skaterPlot1")),
                column(3)),
         br(),
-        fluidRow(
-          radioButtons("skater_table_norm", "Table Value Type", c("Season Total", "Per Game", "Per 60")),
-          div(tableOutput("table"), align="center", style='padding-below:1em;'))),
+        fluidRow(style='padding-bottom:1.2em;',
+          column(2, radioButtons("skater_table_norm", "Table Value Type", c("Season Total", "Per Game", "Per 60"))),
+          column(9, plotOutput("skater_lollipop_plot")),
+          column(1))
+          #div(tableOutput("table"), align="center", style='padding-below:1em;'))
+        ),
       
       tabPanel("League Leaders",
-               # plotOutput("leauge_leader_plot"),
                "Coming soon."),
     
       tabPanel("Per game",
                 "Coming soon.")),
 
+    ## -------------------------------------------------------------------------
     navbarMenu("Team Stats",
       tabPanel("Season Totals",
       fluidRow(
         titlePanel(h1("Live Totals", align = "center")),
         titlePanel(h3("2021-2022", align = "center")),
         br(),
-        column(2,
+        column(3,
           selectInput("total_team_stats_x_user_selected", "X-axis:", choices=team_vars,
                       selected="goalsScored"),
           selectInput("total_team_stats_y_user_selected", "Y-axis:", choices=sort(unique(colnames(df))),
                       selected="goalsAgainst")),
         column(8, plotlyOutput("teamPlot1")),
-        column(2))),
+        column(1))),
       tabPanel("Per game",
           "Coming soon.")),
 

@@ -120,6 +120,11 @@ pdf("figures/0521_kmeans_clustering.pdf", width=8, height=6)
   p2
 dev.off()
 
+#save square version in app
+# png("~/Documents/hockey-stats/bin/hockeystatsapp/www/040122_kmeans_clustering.png", width=1000, height=1000)
+p2
+# dev.off()
+
 
 ## ---- agglomerative
 ## get distances

@@ -52,7 +52,7 @@ xlabels = unique(df$Season)[c(TRUE, FALSE)]
  
 p1 = ggplot(df, aes(x=season_num, y=GF/GP)) +
       geom_point(aes(colour=season_colour), size=1.75, alpha=.9) +
-      geom_point(data=df2[df2$Team == "Edmonton Oilers",], color="black", size=2) +
+      geom_point(data=df[df$Team == "Edmonton Oilers",], color="black", size=2) +
       geom_smooth(alpha=.6, se=T) +
       labs(title = "Goals For / Games Played Across NHL Seasons",
            x = "Season", y="GF/GP") +

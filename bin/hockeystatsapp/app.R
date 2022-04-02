@@ -180,13 +180,17 @@ server = function(input, output) {
     
     data = player_data[,c("points", "goals", "assists", "powerPlayPoints",
                             "powerPlayGoals", "shortHandedPoints",
-                            "shots", "shotPct", "hits", "blocked")]
+                            "shots", "shotPct", "hits", "blocked",
+                            "plusMinus", "timeOnIce", "games")]
     
+    ## *********
+    ## add per game and per 60 options!!!!!!!
+    ## *********
+
     # get max value
     max_values = as.numeric(apply(data, 2, max))
 
     # filter for user selected players
-    # data = data[rownames(data) %in% c(sktr_x, sktr_y),]
     data = rbind("Leader Totals" = max_values,
                  data[rownames(data) %in% c(sktr_x),],
                  data[rownames(data) %in% c(sktr_y),]) #allows for duplicate selections
@@ -196,71 +200,44 @@ server = function(input, output) {
     colnames(data) = tolower(gsub("shorthanded", "sh ", colnames(data)))
 
     data = cbind("selection" = c("League Leader", "Player A", "Player B"), data)
+    
     return(data)
   })
 
+  
   # output table
-  output$table = renderTable({ player_data_filtered()[-1,] })
+  output$table = renderTable({
+    
+    data = player_data_filtered()
+    char_skater_table_norm = as.character(input$skater_table_norm)
+    
+    if(char_skater_table_norm == "Per Game"){
+      data[,-1] = data[,-1] / data$games
+      data
+    } else if(char_skater_table_norm == "Per 60"){
+      data[,-1] = data[,-1] / data$timeonice * 60
+      data
+    }
+    
+    return(data[-1,-1])
+  }, bordered = T, spacing = "s", rownames=T, striped=T, digits=1
+  )
 
-
-  # output$skaterPlot1 = renderPlot({
-  #
-  #   data = player_data_filtered()
-  #   rownames(data) = data$name
-  #   data$name = NULL
-  #
-  #   ## round
-  #   round_any = function(x, accuracy, f=ceiling){f(x/ accuracy) * accuracy}
-  #   max_values_rounded = round_any(as.numeric(apply(data, 2, max))*1.1, 10) ## add buffer with *
-  #   # max_values = round(as.numeric(apply(test, 2, max)), -1)
-  #
-  #   # add max and min of each variable
-  #   data = rbind(max_values_rounded, rep(0, ncol(data)), data)
-  #
-  #   # set colors
-  #   colors_border = alpha(c("#d41102", "#08519C"), .5)
-  #   colors_inner = alpha(colors_border, 0.2)
-  #
-  #   # make radar chart
-  #   radarchart(data,
-  #              axistype = 1,
-  #              pty = 16,
-  #              pcol=colors_border,
-  #              pfcol=colors_inner,
-  #              centerzero = T,
-  #              plwd=3,
-  #              plty=1,
-  #              cglcol = "gray5", #grid line colors
-  #              cglty = 1, #line type
-  #              axislabcol = "black",
-  #              cglwd=0.25, #line width
-  #              calcex=.85,
-  #              vlcex=1.1, #font size magnification
-  #              cex=4,
-  #              vlabels = paste0(colnames(data), "\n(", max_values_rounded,")")
-  #   )
-  #
-  #   # add legend
-  #   legend(x=-2.25, y=-.75, legend = rownames(data[-c(1,2),]),
-  #          bty = "n", pch=20 , col=colors_border,
-  #          text.col = "gray25",
-  #          cex=.9, pt.cex=2)
-  # }
-  # )
 
   ## ------------------------------------------------------------------
   ## new radar plot
   output$skaterPlot1 = renderPlot({
 
     data = player_data_filtered()
-    max_values = as.numeric(data[1,-1]) #remove first chr column and keep first row
-
+    data = data[,!colnames(data) %in% c("plusminus", "timeonice", "games")]
+    max_values = as.numeric(data[1,-1])
+    
     # make fraction of max
     data[,-1] = apply(data[,-1], 2, function(x){x/max(x)}) %>%
       as_tibble()
 
     # get labels
-    axis_labels = paste0(colnames(data)[-1], "\n(", max_values, ")")
+    axis_labels = paste0(colnames(data[,-1]), "\n(", max_values, ")")
 
     ggradar(data,
             values.radar = c("0%", "50%", "100%"),
@@ -271,14 +248,14 @@ server = function(input, output) {
             gridline.min.linetype = "solid", gridline.mid.linetype = "longdash", gridline.max.linetype = "longdash",
             gridline.min.colour = "gray50", gridline.mid.colour = "gray50", gridline.max.colour = "gray50",
             grid.label.size = 5,
-            axis.label.offset = 1.175, axis.label.size = 4.75,
+            axis.label.offset = 1.175, axis.label.size = 5,
             axis.line.colour = "grey", group.line.width = 1.25,
             group.point.size = 2.5,
-            group.colours = c("#d9d9d7", "#d41102", "#08519C"),
+            group.colours = c("#e3e3e3", "#d41102", "#08519C"),
             background.circle.colour = "#D7D6D1", background.circle.transparency = 0.1,
             legend.title = "",
             plot.title = "",
-            legend.text.size = 12,
+            legend.text.size = 14,
             legend.position = "bottom")
   })
 
@@ -287,16 +264,16 @@ server = function(input, output) {
 
 
   #### Total team stats ####
-  tts_x_us = reactive({input$total_team_stats_x_user_selected})
-  tts_y_us = reactive({input$total_team_stats_y_user_selected})
-
-  output$tts_x_us = renderText({
-    tts_x_us()
-  })
-
-    output$tts_y_us = renderText({
-    tts_y_us()
-  })
+  # tts_x_us = reactive({input$total_team_stats_x_user_selected})
+  # tts_y_us = reactive({input$total_team_stats_y_user_selected})
+  # 
+  # output$tts_x_us = renderText({
+  #   tts_x_us()
+  # })
+  # 
+  #   output$tts_y_us = renderText({
+  #   tts_y_us()
+  # })
 
 
 
@@ -319,10 +296,10 @@ server = function(input, output) {
         scale_fill_manual(values=brewer.pal(8, "Blues")) +
         geom_abline(intercept = 0, slope = 1, alpha=.35, linetype="dashed", lwd = .5) +
         theme_bw() +
-        labs(x = charx, y=chary, fill="Division Rank") +
-        theme(title = element_text(size=14),
+        labs(x = charx, y=chary, fill = "Division Rank", title = "Hover Over Points!") +
+        theme(title = element_text(size=11),
               axis.text = element_text(size=11),
-              axis.title = element_text(size=13),
+              axis.title = element_text(size=11),
               legend.position="right")
     )
     }
@@ -349,13 +326,19 @@ ui = fluidPage(
                       selectInput("sktr_x_user_selected", "Player A:", choices=sort(skaters_to_select),
                                   selected="Connor McDavid"),
                       selectInput("sktr_y_user_selected", "Player B:", choices=sort(skaters_to_select),
-                                  selected="Auston Matthews")),
+                                  selected="Auston Matthews"),
+                      h6("*Leauge leader corresponds to the max value from the above list of players")),
                column(6, plotOutput("skaterPlot1")),
-               # column(8, "placeholder"),
                column(3)),
         br(),
         fluidRow(
-          div(tableOutput("table"), align="center"))),
+          radioButtons("skater_table_norm", "Table Value Type", c("Season Total", "Per Game", "Per 60")),
+          div(tableOutput("table"), align="center", style='padding-below:1em;'))),
+      
+      tabPanel("League Leaders",
+               # plotOutput("leauge_leader_plot"),
+               "Coming soon."),
+    
       tabPanel("Per game",
                 "Coming soon.")),
 
@@ -364,13 +347,14 @@ ui = fluidPage(
       fluidRow(
         titlePanel(h1("Live Totals", align = "center")),
         titlePanel(h3("2021-2022", align = "center")),
+        br(),
         column(3,
           selectInput("total_team_stats_x_user_selected", "X-axis:", choices=team_vars,
                       selected="goalsScored"),
           selectInput("total_team_stats_y_user_selected", "Y-axis:", choices=sort(unique(colnames(df))),
                       selected="goalsAgainst")),
-        column(7, plotlyOutput("teamPlot1")),
-        column(2, titlePanel(h3("placeholder", align = "center"))))),
+        column(8, plotlyOutput("teamPlot1")),
+        column(1))),
       tabPanel("Per game",
           "Coming soon.")),
 
@@ -379,50 +363,50 @@ ui = fluidPage(
                   titlePanel(h1("Gallery", align = "center")),
                   titlePanel(h4(tags$a(href="https://medium.com/hockey-stats", "Making sense of the game."), align = "center")),
                   br(),
-                  column(3,
+                  column(3, style='padding:1.2em;',
                          tags$a(img(src = "hcluster_players_cropped.png", height = "100%", width = "100%"),
                                 href="https://medium.com/hockey-stats/comparing-current-nhl-superstars-with-nhl-all-time-greats-650af0ba0f87"),
                          tags$a(h5("Comparing Current NHL Superstars with NHL All-Time Greats", align = "center"),
                                 href="https://medium.com/hockey-stats/comparing-current-nhl-superstars-with-nhl-all-time-greats-650af0ba0f87")),
-                  column(3,
+                  column(3, style='padding:1.2em;',
                          tags$a(img(src = "regular_season_over_time_copped.png", height = "100%", width = "100%"),
                                 href="https://medium.com/hockey-stats/how-has-regular-season-nhl-goal-scoring-changed-over-time-733c6b527c8d"),
                          tags$a(h5("How has regular season NHL goal scoring changed over time?", align = "center"),
                                 href="https://medium.com/hockey-stats/how-has-regular-season-nhl-goal-scoring-changed-over-time-733c6b527c8d")),
-                  column(3,
+                  column(3, style='padding:1.2em;',
                          tags$a(img(src = "shap_values_cropped.png", height = "100%", width = "100%"),
                                 href="https://medium.com/hockey-stats/identifying-the-best-predictors-of-nhl-game-outcomes-using-random-forest-b4c11f46bc97"),
                          tags$a(h5("Identifying the Best Predictors of NHL Game Outcomes Using Random Forest", align = "center"),
                                 href="https://medium.com/hockey-stats/identifying-the-best-predictors-of-nhl-game-outcomes-using-random-forest-b4c11f46bc97")),                  
-                  column(3,
+                  column(3, style='padding:1.2em;',
                          tags$a(img(src = "skaters_cap_hit_cropped.jpg", height = "100%", width = "100%"),
                                 href="https://medium.com/hockey-stats/the-best-and-worst-value-nhl-skaters-will-mitch-marner-top-a-list-5d0667f5a53c"),
                          tags$a(h5("The Best and Worst Value NHL Skaters - Will Mitch Marner Top a List?", align = "center"),
                                 href="https://medium.com/hockey-stats/the-best-and-worst-value-nhl-skaters-will-mitch-marner-top-a-list-5d0667f5a53c"))),
 
               fluidRow(
-                br(),
-                column(3,
+                column(3, style='padding:1.2em;',
                          tags$a(img(src = "pexels_white_cropped.jpg", height = "100%", width = "100%"),
                                 href="https://medium.com/hockey-stats/two-approaches-to-scrape-data-from-capfriendly-using-rselenium-and-rvest-ab29c08e314f"),
                          tags$a(h5("Two Approaches to Scrape Data From CapFriendly Using RSelenium and rvest", align = "center"),
                                 href="https://medium.com/hockey-stats/two-approaches-to-scrape-data-from-capfriendly-using-rselenium-and-rvest-ab29c08e314f")),
-                column(3,
+                column(3, style='padding:1.2em;',
                        tags$a(img(src = "code_example_cropped.png", height = "100%", width = "100%"),
                               href="https://medium.com/hockey-stats/how-to-scrape-nhl-com-dynamic-data-in-r-using-rvest-and-rselenium-ba3b5d87c728"),
                        tags$a(h5("How to Scrape (NHL.com) Dynamic Data in R Using rvest and RSelenium", align = "center"),
                               href="https://medium.com/hockey-stats/how-to-scrape-nhl-com-dynamic-data-in-r-using-rvest-and-rselenium-ba3b5d87c728")),
-                column(3,
+                column(3, style='padding:1.2em;',
                        tags$a(img(src = "sog_corsi_cropped2.jpg", height = "100%", width = "100%"),
                               href="https://medium.com/hockey-stats/are-shot-attempts-and-shots-on-goal-meaningful-predictors-of-nhl-game-outcomes-not-really-f8f8d16811bf"),
                        tags$a(h5("Are Shot Attempts and Shots on Goal Alone Meaningful Predictors of NHL Game Outcomes? Not Really.", align = "center"),
                               href="https://medium.com/hockey-stats/are-shot-attempts-and-shots-on-goal-meaningful-predictors-of-nhl-game-outcomes-not-really-f8f8d16811bf")),
-                column(3,
+                column(3, style='padding:1.2em;',
                        tags$a(img(src = "high_low_cf_cropped.png", height = "100%", width = "100%"),
                               href="https://medium.com/hockey-stats/advanced-hockey-stats-101-corsi-part-1-of-4-29d0a9fb1f95"),
                        tags$a(h5("Advanced Hockey Stats 101: Corsi (Part 1 of 4)", align = "center"),
                               href="https://medium.com/hockey-stats/advanced-hockey-stats-101-corsi-part-1-of-4-29d0a9fb1f95"))
-                    )
+                    ),
+              br()
               
               )
         )

@@ -60,7 +60,7 @@ ggplot(df, aes(cfp, sp)) +
   stat_cor(method="spearman", show.legend  = F,alternative = "greater", size=4.5) +
   geom_abline(intercept=0, slope=1, color="red", linetype="dashed", size=1, alpha=.65)
   
-ggplot(df, aes(cfp, sp)) +
+p3 = ggplot(df, aes(cfp, sp)) +
   #geom_hex(bins=30) +
   geom_point(color="gray52", alpha=.7) + 
   theme_bw() +
@@ -75,8 +75,6 @@ ggplot(df, aes(cfp, sp)) +
   scale_x_continuous(labels = scales::percent) +
   scale_y_continuous(labels = scales::percent) +
   geom_smooth(fill="dodgerblue")
-
-
 
 
 

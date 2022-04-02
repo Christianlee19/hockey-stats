@@ -149,7 +149,7 @@ combined$team = factor(combined$team, levels=rev(unique(combined$team)))
 
 
 ## plot
-ggplot(combined, aes(y=cprel, x=team, label=name)) +
+p3 = ggplot(combined, aes(y=cprel, x=team, label=name)) +
   geom_bar(stat="identity",alpha=.3, fill="dodgerblue4") +
   coord_flip() +
   geom_text(fontface="bold") +

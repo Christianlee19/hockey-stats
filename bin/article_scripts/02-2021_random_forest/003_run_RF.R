@@ -209,12 +209,12 @@ plt$savefig("figures/0322_shap_plots.pdf",bbox_inches = "tight")
 plt$clf()
 
 
-shap$dependence_plot("SKCM TCGA-EB-A5KH", data.matrix(shap_values), input)
-plt$savefig("/.mounts/labs/reimandlab/private/users/oocsenas/ATACSEQ_MUT_THESIS/Random_Forest/data/180620/SHAP_test2.pdf",bbox_inches = "tight")
-plt$clf()
-shap$summary_plot(data.matrix(shap_values),input,show=F,plot_type="bar")
-plt$savefig("/.mounts/labs/reimandlab/private/users/oocsenas/ATACSEQ_MUT_THESIS/Random_Forest/data/180620/SHAP_test_3.pdf",bbox_inches = "tight")
-plt$clf()
+# shap$dependence_plot("SKCM TCGA-EB-A5KH", data.matrix(shap_values), input)
+# plt$savefig("/.mounts/labs/reimandlab/private/users/oocsenas/ATACSEQ_MUT_THESIS/Random_Forest/data/180620/SHAP_test2.pdf",bbox_inches = "tight")
+# plt$clf()
+# shap$summary_plot(data.matrix(shap_values),input,show=F,plot_type="bar")
+# plt$savefig("/.mounts/labs/reimandlab/private/users/oocsenas/ATACSEQ_MUT_THESIS/Random_Forest/data/180620/SHAP_test_3.pdf",bbox_inches = "tight")
+# plt$clf()
 
 
 

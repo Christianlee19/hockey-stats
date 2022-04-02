@@ -1,9 +1,8 @@
 library(shiny)
 library(ggplot2)
 library(nhlapi)
-# library(highcharter)
 library(scales)
-library(fmsb)
+# library(fmsb)
 library(ggradar)
 library(dplyr)
 library(data.table)
@@ -95,41 +94,6 @@ team_vars = team_vars[!(team_vars %in% c("division.name","team.name"))]
 
 
 
-## ---------------------------
-# data = player_data[,c("points", "goals", "assists", "powerPlayPoints",
-#                      "powerPlayGoals", "shortHandedPoints",
-#                      "shots", "shotPct", "hits", "blocked")]
-# max_values = as.numeric(apply(data, 2, max))
-#
-# # filter
-# data = data[rownames(data) %in% c("Connor McDavid", "Auston Matthews"),]
-# data = rbind("Leader Totals" = max_values, data)
-#
-# # make fraction of max
-# data = apply(data, 2, function(x){x/max(x)}) %>%
-#   as_tibble(rownames = "group")
-#
-# # get labels
-# axis_labels = paste0(colnames(data)[-1], " (", max_values, ")")
-#
-# ggradar(data,
-#         values.radar = c("0%", "50%", "100%"),
-#         axis.labels = axis_labels,
-#         fill = T, fill.alpha = .25,
-#         grid.line.width = 0.2,
-#         gridline.min.linetype = "solid", gridline.mid.linetype = "longdash", gridline.max.linetype = "longdash",
-#         gridline.min.colour = "gray50", gridline.mid.colour = "gray50", gridline.max.colour = "gray50",
-#         grid.label.size = 5.5,
-#         axis.label.offset = 1.15, axis.label.size = 5,
-#         axis.line.colour = "grey", group.line.width = 1.25,
-#         group.point.size = 2.5,
-#         group.colours = c("#d41102", "#08519C", "#eaedc0"),
-#         background.circle.colour = "#D7D6D1", background.circle.transparency = 0.1,
-#         legend.title = "",
-#         plot.title = "",
-#         legend.text.size = 12,
-#         legend.position = "bottom")
-
 ## ------------------------------------------------------------------------------------------------------------------------------
 ## Server
 ## ------------------------------------------------------------------------------------------------------------------------------
@@ -183,10 +147,6 @@ server = function(input, output) {
                             "shots", "shotPct", "hits", "blocked",
                             "plusMinus", "timeOnIce", "games")]
     
-    ## *********
-    ## add per game and per 60 options!!!!!!!
-    ## *********
-
     # get max value
     max_values = as.numeric(apply(data, 2, max))
 
@@ -198,7 +158,6 @@ server = function(input, output) {
     # clean column names
     colnames(data) = tolower(gsub("powerPlay", "pp ", colnames(data)))
     colnames(data) = tolower(gsub("shorthanded", "sh ", colnames(data)))
-
     data = cbind("selection" = c("League Leader", "Player A", "Player B"), data)
     
     return(data)
@@ -223,9 +182,13 @@ server = function(input, output) {
   }, bordered = T, spacing = "s", rownames=T, striped=T, digits=1
   )
 
-
-  ## ------------------------------------------------------------------
-  ## new radar plot
+  
+  #### lollipop plot ####
+  #https://r-graph-gallery.com/303-lollipop-plot-with-2-values.html
+  
+  
+  
+  #### new radar plot ####
   output$skaterPlot1 = renderPlot({
 
     data = player_data_filtered()
@@ -299,9 +262,13 @@ server = function(input, output) {
         labs(x = charx, y=chary, fill = "Division Rank", title = "Hover Over Points!") +
         theme(title = element_text(size=11),
               axis.text = element_text(size=11),
-              axis.title = element_text(size=11),
-              legend.position="right")
-    )
+              axis.title = element_text(size=13),
+              legend.title = element_text(size=11), #change legend title font size
+              legend.text = element_text(size=10))) %>% 
+      config(displayModeBar = F) %>%
+      layout(legend = list(
+        orientation = "h", y=-.3)
+      )
     }
   )
 
@@ -421,136 +388,5 @@ ui = fluidPage(
 
 
 
-
-
-
-
-# ui <- fluidPage(
-#
-#   # App title ----
-#   titlePanel("Hockey Stats"),
-#
-#   # Sidebar layout with input and output definitions ----
-#   sidebarLayout(
-#
-#     # Sidebar panel for inputs ----
-#     sidebarPanel(
-#
-#       # Input: Selector for variable to plot against mpg ----
-#       # selectInput("variable", "Team:",
-#       #             c("Cylinders" = "cyl",
-#       #               "Transmission" = "am",
-#       #               "Gears" = "gear")),
-#       selectInput("team_user_selected", "Team:", choices=sort(active_team_roster_team_info$name)),
-#
-#       # Input: Checkbox for whether outliers should be included ----
-#       checkboxInput("outliers", "Show outliers", TRUE)
-#
-#     ),
-#
-#     # Main panel for displaying outputs ----
-#     mainPanel(
-#
-#       # Output: Formatted text for caption ----
-#       h3(textOutput("caption")),
-#       # h4(textOutput("caption2")),
-#
-#
-#       # plot
-#       plotlyOutput("teamPlot")
-#       # plotOutput("teamPlot2")
-#       #highchartOutput("teamPlot")
-#
-#
-#     )
-#   )
-# )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## test
-# mpgData <- mtcars
-# mpgData$am <- factor(mpgData$am, labels = c("Automatic", "Manual"))
-# server <- function(input, output) {
-#
-#   # Compute the formula text ----
-#   # This is in a reactive expression since it is shared by the
-#   # output$caption and output$mpgPlot functions
-#   formulaText <- reactive({
-#     paste("mpg ~", input$variable)
-#   })
-#
-#   # Return the formula text for printing as a caption ----
-#   output$caption <- renderText({
-#     formulaText()
-#   })
-#
-#   # Generate a plot of the requested variable against mpg ----
-#   # and only exclude outliers if requested
-#   output$mpgPlot <- renderPlot({
-#     boxplot(as.formula(formulaText()),
-#             data = mpgData,
-#             outline = input$outliers,
-#             col = "#75AADB", pch = 19)
-#   })
-#
-# }
-
-# Define UI for miles per gallon app ----
-# ui <- fluidPage(
-#
-#   # App title ----
-#   titlePanel("Miles Per Gallon"),
-#
-#   # Sidebar layout with input and output definitions ----
-#   sidebarLayout(
-#
-#     # Sidebar panel for inputs ----
-#     sidebarPanel(
-#
-#       # Input: Selector for variable to plot against mpg ----
-#       selectInput("variable", "Variable:",
-#                   c("Cylinders" = "cyl",
-#                     "Transmission" = "am",
-#                     "Gears" = "gear")),
-#
-#       # Input: Checkbox for whether outliers should be included ----
-#       checkboxInput("outliers", "Show outliers", TRUE)
-#
-#     ),
-#
-#     # Main panel for displaying outputs ----
-#     mainPanel(
-#
-#       # Output: Formatted text for caption ----
-#       h3(textOutput("caption")),
-#
-#       # Output: Plot of the requested variable against mpg ----
-#       plotOutput("mpgPlot")
-#
-#     )
-#   )
-# )
-## end test
-
-
-
-
-
-
-# Run the application
+#### Run the application #####
 shinyApp(ui = ui, server = server)

@@ -88,34 +88,31 @@ team_stats$division.name = active_team_roster_team_info$division.name[match(team
 active_player_info = rbindlist(active_team_rosters_list)
 
 
-
 ## set final variables
 team_vars = sort(unique(colnames(team_stats)))
 team_vars = team_vars[!(team_vars %in% c("division.name","team.name"))]
 
 
 
-##
+#### game data ####
 today_schedule = nhl_schedule_today()[[1]]
 if(today_schedule$totalGames >= 1){
   today_games = today_schedule[[8]]$games[[1]] %>%
-    select(c(gamePk, teams.home.team.name, teams.away.team.name, teams.home.score, teams.away.score, season, status.abstractGameState))
+    select(c(gamePk, teams.home.team.name, teams.away.team.name, teams.home.score, teams.away.score, status.abstractGameState))
+  colnames(today_games)[-1] = c("Home", "Away", "Home Goals",	"Away Goals", "Game Status")
 } else{
   today_games = "Sorry, there are no NHL games today."
 }
 
-# 
-# test = nhl_games(2021020001, "linescore")[[1]]
-# test2 = rbind(data.frame(test[[7]][[1]]), data.frame(test[[7]][[2]]))
-# 
-# 
-# test = nhl_games(2021020001, "boxscore")[[1]][[2]][[1]]
-# 
-# ##[3] gives player info
-# ##[4] and [5] return goalie and skater ids
-# 
-# test2 = rbind(data.frame(test[[7]][[1]]), data.frame(test[[7]][[2]]))
 
+
+test = nhl_games(2021020001, "boxscore")[[1]][[2]][[1]] ##this is just away/home
+
+##[3] gives player info
+##[4] and [5] return goalie and skater ids
+
+
+test2 = data.frame(test[[3]][1]) #returns data frame with info for single player
 
 ## ------------------------------------------------------------------------------------------------------------------------------
 ## Server
@@ -160,8 +157,8 @@ server = function(input, output) {
   #                                           "stat.shots", "stat.hits")]
   #   return(iris)
   # })
-  
-  
+
+
   ### Total team stats ####
   # output$sktr_x = renderText({input$sktr_x_user_selected})
   # output$sktr_y = renderText({input$sktr_y_user_selected})
@@ -174,12 +171,12 @@ server = function(input, output) {
   player_data_filtered = reactive({
     sktr_x = as.character(input$sktr_x_user_selected)
     sktr_y = as.character(input$sktr_y_user_selected)
-    
+
     data = player_data[,c("points", "goals", "assists", "powerPlayPoints",
                             "powerPlayGoals", "shortHandedPoints",
                             "shots", "shotPct", "hits", "blocked",
                             "plusMinus", "timeOnIce", "games")]
-    
+
     # get max value
     max_values = as.numeric(apply(data, 2, max))
 
@@ -187,22 +184,22 @@ server = function(input, output) {
     data = rbind("Leader Totals" = max_values,
                  data[rownames(data) %in% c(sktr_x),],
                  data[rownames(data) %in% c(sktr_y),]) #allows for duplicate selections
-    
+
     # clean column names
     colnames(data) = tolower(gsub("powerPlay", "pp ", colnames(data)))
     colnames(data) = tolower(gsub("shorthanded", "sh ", colnames(data)))
     data = cbind("selection" = c("League Leader", "Player A", "Player B"), data)
-    
+
     return(data)
   })
 
-  
+
   # output table
   # output$table = renderTable({
-  #   
+  #
   #   data = player_data_filtered()
   #   char_skater_table_norm = as.character(input$skater_table_norm)
-  #   
+  #
   #   if(char_skater_table_norm == "Per Game"){
   #     data[,-1] = data[,-1] / data$games
   #     data
@@ -210,18 +207,18 @@ server = function(input, output) {
   #     data[,-1] = data[,-1] / data$timeonice * 60
   #     data
   #   }
-  #   
+  #
   #   return(data[-1,-1])
   # }, bordered = T, spacing = "s", rownames=T, striped=T, digits=1
   # )
 
-  
+
   #### lollipop plot ####
   output$skater_lollipop_plot = renderPlot({
-    
+
     data = player_data_filtered()
     char_skater_table_norm = as.character(input$skater_table_norm)
-    
+
     if(char_skater_table_norm == "Per Game"){
       data[,-1] = data[,-1] / data$games
       data
@@ -229,23 +226,23 @@ server = function(input, output) {
       data[,-1] = data[,-1] / data$timeonice * 60
       data
     }
-    
+
     # remove rows that should not be included in plot
     # data = data[-1,-1]
     data = data[-1, !colnames(data) %in% c("selection","timeonice")]
-    
+
     # transpose
     data = data.frame(t(data), stringsAsFactors = F)
     data = cbind(rownames(data), data)
     colnames(data) = c("var", "Player A", "Player B")
-    
+
     # reorder
     data = data %>%
-      rowwise() %>% 
-      mutate(avg_value = mean(c(`Player A`, `Player B`) )) %>% 
+      rowwise() %>%
+      mutate(avg_value = mean(c(`Player A`, `Player B`) )) %>%
       arrange(avg_value) %>%
       mutate(var=factor(var, var)) #set order
-    
+
 
     # plot
     ggplot(data) +
@@ -263,16 +260,16 @@ server = function(input, output) {
             legend.text = element_text(size=13),
             legend.position = "bottom")
   })
-  
 
-  
+
+
   #### new radar plot ####
   output$skaterPlot1 = renderPlot({
 
     data = player_data_filtered()
     data = data[,!colnames(data) %in% c("plusminus", "timeonice", "games")]
     max_values = as.numeric(data[1,-1])
-    
+
     # make fraction of max
     data[,-1] = apply(data[,-1], 2, function(x){x/max(x)}) %>%
       as_tibble()
@@ -300,24 +297,47 @@ server = function(input, output) {
             legend.position = "bottom")
   })
 
-  
-  
-  
-  
+
+
+
+
   #### Games stats ####
 
   output$live_game_table = renderTable({
-    data = today_games[, !colnames(today_games) %in% c("gamePk", "season")]
-    colnames(data) = c("Home", "Away", "Home Goals",	"Away Goals", "Game Status")
-    return(data)
+    ifelse(class(today_games) == "data.frame", today_games[,-1], "Sorry, no game today.")
   }, bordered = T, spacing = "s", rownames=T, striped=T, digits=1
   )
+
   
   
-  
-  
-  
-  
+  output$live_game_plot = renderPlot({
+
+    data = today_games %>%
+      mutate(user_selection_key = paste0(today_games$Home, " vs ", today_games$Away))
+    data = data[data$user_selection_key == as.character(input$game_user_selected),]
+    
+    ## get game data based on user selection
+    game_data = nhl_games(data$gamePk, "linescore")[[1]]
+    game_data = rbind(data.frame(game_data[[7]][[1]]), data.frame(game_data[[7]][[2]]))
+    
+    ggplot(game_data, aes(x=team.name, y=shotsOnGoal, fill=team.name)) + geom_bar(stat="identity") +
+      theme_bw() +
+      labs(x="Team") +
+      scale_fill_manual(values=c("#6BAED6", "#08519C")) +
+      coord_flip() +
+      theme(title = element_text(size=11),
+            axis.text = element_text(size=14),
+            axis.title = element_text(size=15),
+            legend.text = element_text(size=13),
+            legend.position = "right")
+    
+  })
+
+
+
+
+
+
 
 
 
@@ -325,11 +345,11 @@ server = function(input, output) {
   #### Total team stats ####
   # tts_x_us = reactive({input$total_team_stats_x_user_selected})
   # tts_y_us = reactive({input$total_team_stats_y_user_selected})
-  # 
+  #
   # output$tts_x_us = renderText({
   #   tts_x_us()
   # })
-  # 
+  #
   #   output$tts_y_us = renderText({
   #   tts_y_us()
   # })
@@ -360,7 +380,7 @@ server = function(input, output) {
               axis.text = element_text(size=11),
               axis.title = element_text(size=13),
               legend.title = element_text(size=11), #change legend title font size
-              legend.text = element_text(size=10))) %>% 
+              legend.text = element_text(size=10))) %>%
       config(displayModeBar = F) %>%
       layout(legend = list(
         orientation = "h", y=-.3)
@@ -402,10 +422,10 @@ ui = fluidPage(
           column(1))
           #div(tableOutput("table"), align="center", style='padding-below:1em;'))
         ),
-      
+
       tabPanel("League Leaders",
                "Coming soon."),
-    
+
       tabPanel("Per game",
                 "Coming soon.")),
 
@@ -425,15 +445,21 @@ ui = fluidPage(
         column(1))),
       tabPanel("Per game",
           "Coming soon.")),
-    
+
     ## -------------------------------------------------------------------------
     tabPanel("Live Games",
              div(
                h3("Overview"),
                tableOutput("live_game_table"),
-               align="center", style='padding:1em;')
+               align="center", style='padding:1em;'
              ),
-    
+             fluidRow(
+               column(6,
+                 selectInput("game_user_selected", "Select Game:", choices=paste0(today_games$Home, " vs ", today_games$Away)))),
+             div(align="center", style='padding:1em 2em',
+                 plotOutput("live_game_plot")
+                )
+            ),
     ## -------------------------------------------------------------------------
       tabPanel("Blog",
                 fluidRow(
@@ -454,7 +480,7 @@ ui = fluidPage(
                          tags$a(img(src = "040122_shap.png", height = "100%", width = "100%"),
                                 href="https://medium.com/hockey-stats/identifying-the-best-predictors-of-nhl-game-outcomes-using-random-forest-b4c11f46bc97"),
                          tags$a(h5("Identifying the Best Predictors of NHL Game Outcomes Using Random Forest", align = "center", style="color:black"),
-                                href="https://medium.com/hockey-stats/identifying-the-best-predictors-of-nhl-game-outcomes-using-random-forest-b4c11f46bc97")),                  
+                                href="https://medium.com/hockey-stats/identifying-the-best-predictors-of-nhl-game-outcomes-using-random-forest-b4c11f46bc97")),
                   column(3, style='padding:1.2em;',
                          tags$a(img(src = "040122_cap_hit.png", height = "100%", width = "100%"),
                                 href="https://medium.com/hockey-stats/the-best-and-worst-value-nhl-skaters-will-mitch-marner-top-a-list-5d0667f5a53c"),
@@ -484,7 +510,7 @@ ui = fluidPage(
                               href="https://medium.com/hockey-stats/advanced-hockey-stats-101-corsi-part-1-of-4-29d0a9fb1f95"))
                     ),
               br()
-              
+
               )
         )
    )

@@ -93,6 +93,18 @@ team_vars = team_vars[!(team_vars %in% c("division.name","team.name"))]
 
 
 
+##
+test = nhl_games(2017010001, "linescore")[[1]]
+test2 = rbind(data.frame(test[[7]][[1]]), data.frame(test[[7]][[2]]))
+
+
+test = nhl_games(2017010001, "boxscore")[[1]][[2]][[1]]
+
+##[3] gives player info
+##[4] and [5] return goalie and skater ids
+
+test2 = rbind(data.frame(test[[7]][[1]]), data.frame(test[[7]][[2]]))
+
 
 ## ------------------------------------------------------------------------------------------------------------------------------
 ## Server

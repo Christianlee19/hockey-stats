@@ -2,7 +2,6 @@ library(shiny)
 library(ggplot2)
 library(nhlapi)
 library(scales)
-# library(fmsb)
 library(ggradar)
 library(dplyr)
 library(data.table)
@@ -59,8 +58,12 @@ full_active_player_list = do.call(rbind, lapply(names(active_team_rosters_list),
 
 skaters_to_select = readRDS("data/skaters_to_select.rds")
 
+season_to_use = as.numeric(gsub("(.+)-(.+)-(.+)", "\\1", Sys.Date()))
+season_to_use = as.character(paste0(season_to_use-1, season_to_use))
+
+
 ## filter player data
-player_data = nhl_players_seasons(playerNames = skaters_to_select, seasons = "20212022") ## maybe replace this with ids
+player_data = nhl_players_seasons(playerNames = skaters_to_select, seasons = season_to_use) ## maybe replace this with ids
 rownames(player_data) = skaters_to_select
 
 # clean column names
@@ -68,7 +71,7 @@ colnames(player_data) = gsub("stat.", "", colnames(player_data))
 
 #### team data ####
 team_data = nhl_standings(
-  seasons = 2021:2022) %>%
+  seasons = season_to_use) %>%
   select(1:3, 7:8, 13)
 
 
@@ -87,23 +90,31 @@ active_player_info = rbindlist(active_team_rosters_list)
 
 
 ## set final variables
-df = team_stats
-team_vars = sort(unique(colnames(df)))
+team_vars = sort(unique(colnames(team_stats)))
 team_vars = team_vars[!(team_vars %in% c("division.name","team.name"))]
 
 
 
 ##
-test = nhl_games(2017010001, "linescore")[[1]]
-test2 = rbind(data.frame(test[[7]][[1]]), data.frame(test[[7]][[2]]))
+today_schedule = nhl_schedule_today()[[1]]
+if(today_schedule$totalGames >= 1){
+  today_games = today_schedule[[8]]$games[[1]] %>%
+    select(c(gamePk, teams.home.team.name, teams.away.team.name, teams.home.score, teams.away.score, season, status.abstractGameState))
+} else{
+  today_games = "Sorry, there are no NHL games today."
+}
 
-
-test = nhl_games(2017010001, "boxscore")[[1]][[2]][[1]]
-
-##[3] gives player info
-##[4] and [5] return goalie and skater ids
-
-test2 = rbind(data.frame(test[[7]][[1]]), data.frame(test[[7]][[2]]))
+# 
+# test = nhl_games(2021020001, "linescore")[[1]]
+# test2 = rbind(data.frame(test[[7]][[1]]), data.frame(test[[7]][[2]]))
+# 
+# 
+# test = nhl_games(2021020001, "boxscore")[[1]][[2]][[1]]
+# 
+# ##[3] gives player info
+# ##[4] and [5] return goalie and skater ids
+# 
+# test2 = rbind(data.frame(test[[7]][[1]]), data.frame(test[[7]][[2]]))
 
 
 ## ------------------------------------------------------------------------------------------------------------------------------
@@ -253,15 +264,7 @@ server = function(input, output) {
             legend.position = "bottom")
   })
   
-  ggplot(df, aes(x = instance, y = total_hits)) +
-    geom_point(size = 1) + 
-    geom_line()+
-    geom_line(aes(x=instance, y = line1, colour="myline1")) +
-    geom_vline(xintercept=805) + 
-    geom_line(aes(x=instance, y = line2, colour="myline2"))+
-    geom_line(aes(x=instance, y = line3, colour="myline3")) +
-    scale_colour_manual(name="Line Color",
-                        values=c(myline1="red", myline2="blue", myline3="purple"))
+
   
   #### new radar plot ####
   output$skaterPlot1 = renderPlot({
@@ -297,6 +300,24 @@ server = function(input, output) {
             legend.position = "bottom")
   })
 
+  
+  
+  
+  
+  #### Games stats ####
+
+  output$live_game_table = renderTable({
+    data = today_games[, !colnames(today_games) %in% c("gamePk", "season")]
+    colnames(data) = c("Home", "Away", "Home Goals",	"Away Goals", "Game Status")
+    return(data)
+  }, bordered = T, spacing = "s", rownames=T, striped=T, digits=1
+  )
+  
+  
+  
+  
+  
+  
 
 
 
@@ -327,7 +348,7 @@ server = function(input, output) {
     chary = get_cleaned_titles(as.character(input$total_team_stats_y_user_selected))
 
     ggplotly(
-      ggplot(data=df, aes(x=!!testx,
+      ggplot(data=team_stats, aes(x=!!testx,
                           y=!!testy,
                           group=team.name)) +
         geom_point(aes(fill=divisionRank), color="black", size=4, pch=21) +
@@ -346,9 +367,6 @@ server = function(input, output) {
       )
     }
   )
-
-
-
 }
 
 
@@ -365,18 +383,20 @@ ui = fluidPage(
                titlePanel(h1("Live Totals", align = "center")),
                # titlePanel(h3("2021-2022", align = "center")),
                h4(textOutput("sktr_comparison"), align="center"),
-               column(3, style='padding-top:1em;',
+               div(style='padding-top:1.25em;',
+               column(3,
                       selectInput("sktr_x_user_selected", "Player A:", choices=sort(skaters_to_select),
                                   selected="Connor McDavid"),
                       selectInput("sktr_y_user_selected", "Player B:", choices=sort(skaters_to_select),
                                   selected="Auston Matthews"),
-                      h6("*Leauge leader corresponds to the max value from the above list of players"),
-                      h6("pp = power play"),
-                      h6("sh = short handed")),
+                      div(style="font-size:1.1rem",
+                      "*Leauge leader corresponds to the max value from the above list of players.",
+                      br(),
+                      "pp = power play, sh = short handed.")),
                column(6, plotOutput("skaterPlot1")),
-               column(3)),
+               column(3))),
         br(),
-        fluidRow(style='padding-bottom:1.2em;',
+        fluidRow(style='padding:1em 0 2em 0',
           column(2, radioButtons("skater_table_norm", "Table Value Type", c("Season Total", "Per Game", "Per 60"))),
           column(9, plotOutput("skater_lollipop_plot")),
           column(1))
@@ -399,13 +419,22 @@ ui = fluidPage(
         column(3,
           selectInput("total_team_stats_x_user_selected", "X-axis:", choices=team_vars,
                       selected="goalsScored"),
-          selectInput("total_team_stats_y_user_selected", "Y-axis:", choices=sort(unique(colnames(df))),
+          selectInput("total_team_stats_y_user_selected", "Y-axis:", choices=sort(unique(colnames(team_stats))),
                       selected="goalsAgainst")),
         column(8, plotlyOutput("teamPlot1")),
         column(1))),
       tabPanel("Per game",
           "Coming soon.")),
-
+    
+    ## -------------------------------------------------------------------------
+    tabPanel("Live Games",
+             div(
+               h3("Overview"),
+               tableOutput("live_game_table"),
+               align="center", style='padding:1em;')
+             ),
+    
+    ## -------------------------------------------------------------------------
       tabPanel("Blog",
                 fluidRow(
                   titlePanel(h1("Gallery", align = "center")),

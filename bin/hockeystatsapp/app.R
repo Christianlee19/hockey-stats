@@ -105,14 +105,81 @@ if(today_schedule$totalGames >= 1){
 }
 
 
-
-test = nhl_games(2021020001, "boxscore")[[1]][[2]][[1]] ##this is just away/home
-
-##[3] gives player info
-##[4] and [5] return goalie and skater ids
+## boxscores
+home_boxscore = nhl_games(2021020001, "boxscore")[[1]][[2]][[2]]
+away_boxscore = nhl_games(2021020001, "boxscore")[[1]][[2]][[1]]
 
 
-test2 = data.frame(test[[3]][1]) #returns data frame with info for single player
+get_live_player_stats = function(i, df_box){
+  
+  df_box_i = df_box[[3]][[i]]
+  
+  if(df_box_i[3][[1]]$type == "Forward"){
+    # print(i)
+    df_box_stats = data.frame(t(unlist(df_box_i[4][[1]]$skaterStats)), stringsAsFactors = F)
+    df_box_stats = df_box_stats[,colnames(df_box_stats) %in% c("goals","assists","powerPlayGoals","powerPlayAssits","shots","hits","blocked","plusMinus")]
+    df_box_stats$player_name = df_box_i[[1]]$fullName
+    df_box_stats$type = "Forward"
+    df_box_stats$team_name = df_box_i[[1]]$currentTeam$name
+    return(df_box_stats)
+      
+  } else if(df_box_i[3][[1]]$type == "Defenseman"){
+    # print(i)
+  
+    
+  } else if(df_box_i[3][[1]]$type == "Goalie") {
+    # print(i)
+
+  }else{ #sometimes there are "Uknown" ... probably when player is moved on or off line up
+    # print(i)
+  }
+  
+}
+
+home = do.call(rbind, lapply(1:length(home_boxscore[[3]]), get_live_player_stats, home_boxscore))
+away = do.call(rbind, lapply(1:length(away_boxscore[[3]]), get_live_player_stats, away_boxscore))
+
+combined_game_stats = data.frame(rbind(home, away), stringsAsFactors = F)
+combined_game_stats[,1:6] = sapply(combined_game_stats[,1:6], as.numeric)
+combined_game_stats = combined_game_stats[order(combined_game_stats$goals + combined_game_stats$assists, decreasing = F),]
+combined_game_stats$player_name = factor(combined_game_stats$player_name, levels = combined_game_stats$player_name)
+
+test = melt(setDT(combined_game_stats), measure.vars=c("goals", "assists", "shots", "hits"), id.vars=c("player_name","type", "team_name"))
+
+
+# ggplot(test, aes(y=player_name, x=value, fill=variable)) +
+#   geom_point(pch=21, size=4, position = position_jitterdodge(jitter.width=.2)) +
+#   geom_linerange(
+#     aes(xmin=0, xmax=value, y=player_name),
+#       color="gray40", size=.65, position = position_jitterdodge(jitter.width=.2), alpha=.5) +
+#   scale_fill_manual(values=brewer.pal(4, "Set1")) +
+#   theme_bw() + 
+#   theme(title = element_text(size=11),
+#         axis.text.x = element_text(size=13),
+#         axis.text.y = element_text(size=11),
+#         axis.title = element_text(size=14),
+#         legend.text = element_text(size=12),
+#         legend.position = "bottom") +
+#   facet_wrap(~team_name, scales="free_y")
+
+
+ggplot(test, aes(y=player_name, x=value, fill=variable)) +
+  geom_bar(stat="identity", position="dodge") +
+  scale_fill_manual(values=brewer.pal(4, "Set1")) +
+  theme_bw() + 
+  theme(title = element_text(size=11),
+        axis.text.x = element_text(size=13),
+        axis.text.y = element_text(size=11),
+        axis.title = element_text(size=14),
+        legend.text = element_text(size=12),
+        legend.position = "bottom") +
+  facet_wrap(~team_name, scales="free_y")
+
+
+# colnames(df_box_index) = gsub("(ID.+)\\.(.+)", "\\2", colnames(df_box_index))
+# df_box_index = df_box_index[,c("fullName","name","type",33:)]
+# select(1:2,24:27,29:52)
+
 
 ## ------------------------------------------------------------------------------------------------------------------------------
 ## Server
@@ -300,7 +367,7 @@ server = function(input, output) {
 
 
 
-
+  ## -----------------------------------------------------------------------------------
   #### Games stats ####
 
   output$live_game_table = renderTable({
@@ -460,6 +527,7 @@ ui = fluidPage(
                  plotOutput("live_game_plot")
                 )
             ),
+    
     ## -------------------------------------------------------------------------
       tabPanel("Blog",
                 fluidRow(

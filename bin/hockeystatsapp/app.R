@@ -75,12 +75,19 @@ team_data = nhl_standings(
   select(1:3, 7:8, 13)
 
 
-## **** using more years will require function to combine b/c different column names
-# team_data = nhl_standings(
-#   seasons = 2018:2022)
+# team_stats = do.call(rbind, lapply(team_data$teamRecords, "[", 1:ncol(team_data$teamRecords[[1]]))) %>%
+#   select(team.name, regulationWins, goalsAgainst, goalsScored, points, divisionRank, divisionL10Rank, leagueRank, gamesPlayed, pointsPercentage)
 
-team_stats = do.call(rbind, lapply(team_data$teamRecords, "[", 1:ncol(team_data$teamRecords[[1]]))) %>%
-  select(team.name, regulationWins, goalsAgainst, goalsScored, points, divisionRank, divisionL10Rank, leagueRank, gamesPlayed, pointsPercentage)
+get_combined_team_stats = function(i, df){
+  df = df$teamRecords[[i]] %>% 
+    select(team.name, regulationWins, goalsAgainst, goalsScored, points, divisionRank, divisionL10Rank, leagueRank, gamesPlayed, pointsPercentage)
+  return(df)
+}
+
+team_stats = do.call(rbind, lapply(1:length(team_data$teamRecords), get_combined_team_stats, team_data))
+# dim(team_stats)
+# [1]  32 10
+
 
 team_stats$division.name = active_team_roster_team_info$division.name[match(team_stats$team.name, active_team_roster_team_info$name)]
 
@@ -105,46 +112,46 @@ if(today_schedule$totalGames >= 1){
 }
 
 
-## boxscores
-home_boxscore = nhl_games(2021020001, "boxscore")[[1]][[2]][[2]]
-away_boxscore = nhl_games(2021020001, "boxscore")[[1]][[2]][[1]]
-
-
-get_live_player_stats = function(i, df_box){
-  
-  df_box_i = df_box[[3]][[i]]
-  
-  if(df_box_i[3][[1]]$type == "Forward"){
-    # print(i)
-    df_box_stats = data.frame(t(unlist(df_box_i[4][[1]]$skaterStats)), stringsAsFactors = F)
-    df_box_stats = df_box_stats[,colnames(df_box_stats) %in% c("goals","assists","powerPlayGoals","powerPlayAssits","shots","hits","blocked","plusMinus")]
-    df_box_stats$player_name = df_box_i[[1]]$fullName
-    df_box_stats$type = "Forward"
-    df_box_stats$team_name = df_box_i[[1]]$currentTeam$name
-    return(df_box_stats)
-      
-  } else if(df_box_i[3][[1]]$type == "Defenseman"){
-    # print(i)
-  
-    
-  } else if(df_box_i[3][[1]]$type == "Goalie") {
-    # print(i)
-
-  }else{ #sometimes there are "Uknown" ... probably when player is moved on or off line up
-    # print(i)
-  }
-  
-}
-
-home = do.call(rbind, lapply(1:length(home_boxscore[[3]]), get_live_player_stats, home_boxscore))
-away = do.call(rbind, lapply(1:length(away_boxscore[[3]]), get_live_player_stats, away_boxscore))
-
-combined_game_stats = data.frame(rbind(home, away), stringsAsFactors = F)
-combined_game_stats[,1:6] = sapply(combined_game_stats[,1:6], as.numeric)
-combined_game_stats = combined_game_stats[order(combined_game_stats$goals + combined_game_stats$assists, decreasing = F),]
-combined_game_stats$player_name = factor(combined_game_stats$player_name, levels = combined_game_stats$player_name)
-
-test = melt(setDT(combined_game_stats), measure.vars=c("goals", "assists", "shots", "hits"), id.vars=c("player_name","type", "team_name"))
+# ## boxscores
+# home_boxscore = nhl_games(2021020001, "boxscore")[[1]][[2]][[2]]
+# away_boxscore = nhl_games(2021020001, "boxscore")[[1]][[2]][[1]]
+# 
+# 
+# get_live_player_stats = function(i, df_box){
+# 
+#   df_box_i = df_box[[3]][[i]]
+# 
+#   if(df_box_i[3][[1]]$type == "Forward"){
+#     # print(i)
+#     df_box_stats = data.frame(t(unlist(df_box_i[4][[1]]$skaterStats)), stringsAsFactors = F)
+#     df_box_stats = df_box_stats[,colnames(df_box_stats) %in% c("goals","assists","powerPlayGoals","powerPlayAssits","shots","hits","blocked","plusMinus")]
+#     df_box_stats$player_name = df_box_i[[1]]$fullName
+#     df_box_stats$type = "Forward"
+#     df_box_stats$team_name = df_box_i[[1]]$currentTeam$name
+#     return(df_box_stats)
+# 
+#   } else if(df_box_i[3][[1]]$type == "Defenseman"){
+#     # print(i)
+# 
+# 
+#   } else if(df_box_i[3][[1]]$type == "Goalie") {
+#     # print(i)
+# 
+#   }else{ #sometimes there are "Uknown" ... probably when player is moved on or off line up
+#     # print(i)
+#   }
+# 
+# }
+# 
+# home = do.call(rbind, lapply(1:length(home_boxscore[[3]]), get_live_player_stats, home_boxscore))
+# away = do.call(rbind, lapply(1:length(away_boxscore[[3]]), get_live_player_stats, away_boxscore))
+# 
+# combined_game_stats = data.frame(rbind(home, away), stringsAsFactors = F)
+# combined_game_stats[,1:6] = sapply(combined_game_stats[,1:6], as.numeric)
+# combined_game_stats = combined_game_stats[order(combined_game_stats$goals + combined_game_stats$assists, decreasing = F),]
+# combined_game_stats$player_name = factor(combined_game_stats$player_name, levels = combined_game_stats$player_name)
+# 
+# test = melt(setDT(combined_game_stats), measure.vars=c("goals", "assists", "shots", "hits"), id.vars=c("player_name","type", "team_name"))
 
 
 # ggplot(test, aes(y=player_name, x=value, fill=variable)) +
@@ -153,7 +160,7 @@ test = melt(setDT(combined_game_stats), measure.vars=c("goals", "assists", "shot
 #     aes(xmin=0, xmax=value, y=player_name),
 #       color="gray40", size=.65, position = position_jitterdodge(jitter.width=.2), alpha=.5) +
 #   scale_fill_manual(values=brewer.pal(4, "Set1")) +
-#   theme_bw() + 
+#   theme_bw() +
 #   theme(title = element_text(size=11),
 #         axis.text.x = element_text(size=13),
 #         axis.text.y = element_text(size=11),
@@ -163,17 +170,17 @@ test = melt(setDT(combined_game_stats), measure.vars=c("goals", "assists", "shot
 #   facet_wrap(~team_name, scales="free_y")
 
 
-ggplot(test, aes(y=player_name, x=value, fill=variable)) +
-  geom_bar(stat="identity", position="dodge") +
-  scale_fill_manual(values=brewer.pal(4, "Set1")) +
-  theme_bw() + 
-  theme(title = element_text(size=11),
-        axis.text.x = element_text(size=13),
-        axis.text.y = element_text(size=11),
-        axis.title = element_text(size=14),
-        legend.text = element_text(size=12),
-        legend.position = "bottom") +
-  facet_wrap(~team_name, scales="free_y")
+# ggplot(test, aes(y=player_name, x=value, fill=variable)) +
+#   geom_bar(stat="identity", position="dodge") +
+#   scale_fill_manual(values=brewer.pal(4, "Set1")) +
+#   theme_bw() +
+#   theme(title = element_text(size=11),
+#         axis.text.x = element_text(size=13),
+#         axis.text.y = element_text(size=11),
+#         axis.title = element_text(size=14),
+#         legend.text = element_text(size=12),
+#         legend.position = "bottom") +
+#   facet_wrap(~team_name, scales="free_y")
 
 
 # colnames(df_box_index) = gsub("(ID.+)\\.(.+)", "\\2", colnames(df_box_index))
@@ -371,34 +378,35 @@ server = function(input, output) {
   #### Games stats ####
 
   output$live_game_table = renderTable({
-    ifelse(class(today_games) == "data.frame", today_games[,-1], "Sorry, no game today.")
+    # ifelse(class(today_games) == "data.frame", today_games[,-1], "Sorry, no game today.")
+    today_games[,-1]
   }, bordered = T, spacing = "s", rownames=T, striped=T, digits=1
   )
 
-  
-  
-  output$live_game_plot = renderPlot({
 
-    data = today_games %>%
-      mutate(user_selection_key = paste0(today_games$Home, " vs ", today_games$Away))
-    data = data[data$user_selection_key == as.character(input$game_user_selected),]
-    
-    ## get game data based on user selection
-    game_data = nhl_games(data$gamePk, "linescore")[[1]]
-    game_data = rbind(data.frame(game_data[[7]][[1]]), data.frame(game_data[[7]][[2]]))
-    
-    ggplot(game_data, aes(x=team.name, y=shotsOnGoal, fill=team.name)) + geom_bar(stat="identity") +
-      theme_bw() +
-      labs(x="Team") +
-      scale_fill_manual(values=c("#6BAED6", "#08519C")) +
-      coord_flip() +
-      theme(title = element_text(size=11),
-            axis.text = element_text(size=14),
-            axis.title = element_text(size=15),
-            legend.text = element_text(size=13),
-            legend.position = "right")
-    
-  })
+
+  # output$live_game_plot = renderPlot({
+  # 
+  #   data = today_games %>%
+  #     mutate(user_selection_key = paste0(today_games$Home, " vs ", today_games$Away))
+  #   data = data[data$user_selection_key == as.character(input$game_user_selected),]
+  # 
+  #   ## get game data based on user selection
+  #   game_data = nhl_games(data$gamePk, "linescore")[[1]]
+  #   game_data = rbind(data.frame(game_data[[7]][[1]]), data.frame(game_data[[7]][[2]]))
+  # 
+  #   ggplot(game_data, aes(x=team.name, y=shotsOnGoal, fill=team.name)) + geom_bar(stat="identity") +
+  #     theme_bw() +
+  #     labs(x="Team") +
+  #     scale_fill_manual(values=c("#6BAED6", "#08519C")) +
+  #     coord_flip() +
+  #     theme(title = element_text(size=11),
+  #           axis.text = element_text(size=14),
+  #           axis.title = element_text(size=15),
+  #           legend.text = element_text(size=13),
+  #           legend.position = "right")
+  # 
+  # })
 
 
 
@@ -519,15 +527,15 @@ ui = fluidPage(
                h3("Overview"),
                tableOutput("live_game_table"),
                align="center", style='padding:1em;'
-             ),
-             fluidRow(
-               column(6,
-                 selectInput("game_user_selected", "Select Game:", choices=paste0(today_games$Home, " vs ", today_games$Away)))),
-             div(align="center", style='padding:1em 2em',
-                 plotOutput("live_game_plot")
-                )
+             )
+             # fluidRow(
+             #   column(6,
+             #     selectInput("game_user_selected", "Select Game:", choices=paste0(today_games$Home, " vs ", today_games$Away)))),
+             # div(align="center", style='padding:1em 2em',
+             #     plotOutput("live_game_plot")
+             #    )
             ),
-    
+
     ## -------------------------------------------------------------------------
       tabPanel("Blog",
                 fluidRow(

@@ -8,6 +8,7 @@ library(data.table)
 library(plotly)
 library(RColorBrewer)
 library(formattable)
+library(ggpubr)
 
 
 ## ------------------------------------------------------------------------------------------------------------------------------
@@ -101,18 +102,34 @@ team_vars = sort(unique(colnames(team_stats)))
 team_vars = team_vars[!(team_vars %in% c("division.name","team.name"))]
 
 
+today_schedule = nhl_schedule_today()[[1]]
+today_games = today_schedule[[8]]$games[[1]] %>%
+  select(c(gamePk, teams.home.team.name, teams.away.team.name, teams.home.score, teams.away.score, gameDate, status.abstractGameState)) %>%
+  mutate(gameDate = as.numeric(gsub("(.+)T([0-9][0-9]):([0-9][0-9]):(.+)", "\\2\\3", gameDate))) %>%
+  mutate(gameDate = ifelse(gameDate >= 1800, paste0(gameDate - 1700, "pm"), 
+                           ifelse(gameDate < 1700, paste0(gameDate - 500, "am"), paste0(gameDate - 500, "pm")))) %>%
+  mutate(gameDate = gsub("(.+)([0-9][0-9].+)", "\\1:\\2", gameDate))
+
+
 
 #### game data ####
 today_schedule = nhl_schedule_today()[[1]]
 if(today_schedule$totalGames >= 1){
   today_games = today_schedule[[8]]$games[[1]] %>%
-    select(c(gamePk, teams.home.team.name, teams.away.team.name, teams.home.score, teams.away.score, status.abstractGameState))
-  colnames(today_games)[-1] = c("Home", "Away", "Home Goals",	"Away Goals", "Status")
+    select(c(gamePk, teams.home.team.name, teams.away.team.name, teams.home.score, teams.away.score, status.abstractGameState, gameDate)) %>%
+    mutate(gameDate = as.numeric(gsub("(.+)T([0-9][0-9]):([0-9][0-9]):(.+)", "\\2\\3", gameDate))) %>%
+    mutate(gameDate = ifelse(gameDate >= 1800, paste0(gameDate - 1700, "pm"), 
+                             ifelse(gameDate < 1700, paste0(gameDate - 500, "am"), paste0(gameDate - 500, "pm")))) %>%
+    mutate(gameDate = gsub("(.+)([0-9][0-9].+)", "\\1:\\2", gameDate))
+  colnames(today_games)[-1] = c("Home", "Away", "Home Goals",	"Away Goals", "Status (cst)", "Time")
+  
 } else{
   today_games = expand.grid(NA, NA, NA, NA, NA, NA, NA, stringsAsFactors=F)
-  colnames(today_games) = c("gamePk", "Home", "Away", "Home Goals",	"Away Goals", "Status")
+  colnames(today_games) = c("gamePk", "Home", "Away", "Home Goals",	"Away Goals", "Status (cst)", "Time")
 }
 
+today_games$`Status (cst)` = ifelse(today_games$`Status (cst)` == "Preview", today_games$Time, today_games$`Status (cst)`)
+today_games$Time = NULL
 today_games$Home = active_team_roster_team_info$teamName[match(today_games$Home, active_team_roster_team_info$name)]
 today_games$Away = active_team_roster_team_info$teamName[match(today_games$Away, active_team_roster_team_info$name)]
 
@@ -137,7 +154,6 @@ server = function(input, output) {
   #   x = subset(df, team.name == team_user_selected())
   #   return(x)
   # })
-
 
 
   #### Total player stats ####
@@ -198,24 +214,6 @@ server = function(input, output) {
     return(data)
   })
 
-
-  # output table
-  # output$table = renderTable({
-  #
-  #   data = player_data_filtered()
-  #   char_skater_table_norm = as.character(input$skater_table_norm)
-  #
-  #   if(char_skater_table_norm == "Per Game"){
-  #     data[,-1] = data[,-1] / data$games
-  #     data
-  #   } else if(char_skater_table_norm == "Per 60"){
-  #     data[,-1] = data[,-1] / data$timeonice * 60
-  #     data
-  #   }
-  #
-  #   return(data[-1,-1])
-  # }, bordered = T, spacing = "s", rownames=T, striped=T, digits=1
-  # )
 
 
   #### lollipop plot ####
@@ -308,16 +306,10 @@ server = function(input, output) {
   ## -----------------------------------------------------------------------------------
   #### Games stats ####
 
-  # output$live_game_table = renderTable({
-  #   today_games$Home = active_team_roster_team_info$teamName[match(today_games$Home, active_team_roster_team_info$name)]
-  #   today_games$Away = active_team_roster_team_info$teamName[match(today_games$Away, active_team_roster_team_info$name)]
-  #   today_games[,-1]
-  # }, bordered = T, spacing = "s", rownames=T, striped=T, digits=1
-  # )
-  
+  ## table
   output$live_game_table = renderFormattable({
     
-  customRange = c(0, max(today_games$`Away Goals`, max(today_games$`Home Goals`))) # custom min / max values
+  customRange = c(0, max(suppressWarnings(max(today_games$`Away Goals`)), suppressWarnings(max(today_games$`Home Goals`)))) # custom min / max values
   colors = csscolor(gradient(as.numeric(c(customRange, today_games$`Home Goals`)), "white", "#f2e200"))
   colors = colors[-(1:2)] ## remove colors for min/max
   
@@ -396,14 +388,33 @@ server = function(input, output) {
     ## make data long to plot
     melt_combined_game_stats = melt(setDT(combined_game_stats), measure.vars=c("points", "goals", "assists", "shots", "hits", "blocked", "plusMinus"), 
                 id.vars=c("player_name","type", "team_name", "home_or_away"))
-    melt_combined_game_stats$home_or_away = factor(melt_combined_game_stats$home_or_away, levels=c("Home", "Away"))
+    # melt_combined_game_stats$home_or_away = factor(melt_combined_game_stats$home_or_away, levels=c("Home", "Away"))
     
     ## plot
-    ggplot(melt_combined_game_stats, aes(x=variable, y=player_name, fill=value, label=value)) +
+    # ggplot(melt_combined_game_stats, aes(x=variable, y=player_name, fill=value, label=value)) +
+    #   geom_tile(color = "gray80", lwd = .25, linetype = 1, alpha = .9) +
+    #   scale_fill_gradient2(low = "#075AFF", mid = "#FFFFFF", high = "#FF0000") +
+    #   geom_text(data = melt_combined_game_stats[melt_combined_game_stats$value != 0,], color = "gray15") + 
+    #   facet_wrap(~home_or_away + team_name, scales="free_y", ncol = 1, strip.position=c("right")) +
+    #   labs(y="Player", x="Statistic", fill="Count") +
+    #   scale_x_discrete(position = c("top","bottom")) +
+    #   theme(strip.background = element_rect(fill="gray95", color="gray75"),
+    #         strip.text = element_text(size=13, color="black", face="bold"), 
+    #         panel.background = element_rect(fill = "white", color="gray75"),
+    #         axis.text = element_text(size=12),
+    #         axis.text.x = element_text(angle=45, hjust=1, size=13),
+    #         axis.title = element_text(size=14),
+    #         legend.text = element_text(size=11),
+    #         legend.title = element_text(size=12))
+    
+    home = melt_combined_game_stats[melt_combined_game_stats$home_or_away == "Home",]
+    away = melt_combined_game_stats[melt_combined_game_stats$home_or_away == "Away",]
+    
+    home = ggplot(home, aes(x=variable, y=player_name, fill=value, label=value)) +
       geom_tile(color = "gray80", lwd = .25, linetype = 1, alpha = .9) +
       scale_fill_gradient2(low = "#075AFF", mid = "#FFFFFF", high = "#FF0000") +
-      geom_text(data = melt_combined_game_stats[melt_combined_game_stats$value != 0,], color = "gray15") + 
-      facet_wrap(~home_or_away + team_name, scales="free_y", ncol = 1) +
+      geom_text(data = home[home$value != 0,], color = "gray15") + 
+      facet_wrap(~ team_name, strip.position=c("right")) +
       labs(y="Player", x="Statistic", fill="Count") +
       theme(strip.background = element_rect(fill="gray95", color="gray75"),
             strip.text = element_text(size=13, color="black", face="bold"), 
@@ -411,8 +422,25 @@ server = function(input, output) {
             axis.text = element_text(size=12),
             axis.text.x = element_text(angle=45, hjust=1, size=13),
             axis.title = element_text(size=14),
-            legend.text = element_text(size=11),
-            legend.title = element_text(size=12))
+            axis.title.x = element_blank(),
+            legend.position = "none")
+      
+    away = ggplot(away, aes(x=variable, y=player_name, fill=value, label=value)) +
+      geom_tile(color = "gray80", lwd = .25, linetype = 1, alpha = .9) +
+      scale_fill_gradient2(low = "#075AFF", mid = "#FFFFFF", high = "#FF0000") +
+      geom_text(data = away[away$value != 0,], color = "gray15") + 
+      facet_wrap(~ team_name, strip.position=c("right")) +
+      labs(y="Player", x="Statistic", fill="Count") +
+      theme(strip.background = element_rect(fill="gray95", color="gray75"),
+            strip.text = element_text(size=13, color="black", face="bold"), 
+            panel.background = element_rect(fill = "white", color="gray75"),
+            axis.text = element_text(size=12),
+            axis.text.x = element_text(angle=45, hjust=1, size=13),
+            axis.title = element_text(size=14),
+            legend.position = "none")
+      
+    ggarrange(home, away, ncol=1, common.legend = TRUE, legend="right")
+    
   })
 
 
@@ -453,7 +481,7 @@ server = function(input, output) {
         geom_abline(intercept = 0, slope = 1, alpha=.35, linetype="dashed", lwd = .5) +
         theme_bw() +
         labs(x = charx, y=chary, fill = "Division Rank", title = "Hover Over Points!") +
-        theme(title = element_text(size=11),
+        theme(title = element_text(size=10),
               axis.text = element_text(size=11),
               axis.title = element_text(size=13),
               legend.title = element_text(size=11), #change legend title font size
@@ -474,11 +502,27 @@ server = function(input, output) {
 ## ------------------------------------------------------------------------------------------------------------------------------
 ui = fluidPage(
   navbarPage("Hockey Stats",
+             
+             tabPanel("Live Games",
+                      fluidRow(
+                        column(8, offset=2,
+                               h1("Overview", style='padding-bottom:.5em'),
+                               formattableOutput("live_game_table", width = "100%"),
+                               align="center", style='padding:1em;')),
+                      fluidRow(
+                        column(3,
+                               selectInput("game_user_selected", "Select Game:", 
+                                           choices=paste0(today_games$Home, " vs ", today_games$Away)))),
+                      fluidRow(style='padding-bottom: 1em',
+                               column(8, offset=2, style='padding:0 1em',
+                                      plotOutput("live_game_plot", height = "800px")))
+             ),
+             
+## -------------------------------------------------------------------------        
     navbarMenu("Player Stats",
       tabPanel("Season Totals",
         fluidRow(
                titlePanel(h1("Live Totals", align = "center")),
-               # titlePanel(h3("2021-2022", align = "center")),
                h4(textOutput("sktr_comparison"), align="center"),
                div(style='padding-top:1.25em;',
                column(3,
@@ -497,7 +541,6 @@ ui = fluidPage(
           column(2, radioButtons("skater_table_norm", "Table Value Type", c("Season Total", "Per Game", "Per 60"))),
           column(9, plotOutput("skater_lollipop_plot")),
           column(1))
-          #div(tableOutput("table"), align="center", style='padding-below:1em;'))
         ),
 
       tabPanel("League Leaders",
@@ -523,21 +566,7 @@ ui = fluidPage(
       tabPanel("Per game",
           "Coming soon.")),
 
-    ## -------------------------------------------------------------------------
-    tabPanel("Live Games",
-             div(
-               column(8, offset=2,
-               h1("Overview", style='padding-bottom:.5em'),
-               formattableOutput("live_game_table"),
-               align="center", style='padding:1em;')),
-             fluidRow(
-               column(3,
-                 selectInput("game_user_selected", "Select Game:", choices=paste0(today_games$Home, " vs ", today_games$Away)))),
-             fluidRow(style='padding-bottom: 1em',
-               column(8, offset=2, style='padding:0 1em',
-                 plotOutput("live_game_plot", height = "700px")))
-            ),
-
+    
     ## -------------------------------------------------------------------------
     tabPanel("Blog",
               fluidRow(

@@ -7,6 +7,7 @@ library(dplyr)
 library(data.table)
 library(plotly)
 library(RColorBrewer)
+library(formattable)
 
 
 ## ------------------------------------------------------------------------------------------------------------------------------
@@ -106,75 +107,16 @@ today_schedule = nhl_schedule_today()[[1]]
 if(today_schedule$totalGames >= 1){
   today_games = today_schedule[[8]]$games[[1]] %>%
     select(c(gamePk, teams.home.team.name, teams.away.team.name, teams.home.score, teams.away.score, status.abstractGameState))
-  colnames(today_games)[-1] = c("Home", "Away", "Home Goals",	"Away Goals", "Game Status")
+  colnames(today_games)[-1] = c("Home", "Away", "Home Goals",	"Away Goals", "Status")
 } else{
-  today_games = expand.grid(NA,NA,NA,NA,NA,NA,NA, stringsAsFactors=F)
-  colnames(today_games) = c("gamePk", "Home", "Away", "Home Goals",	"Away Goals", "Game Status")
+  today_games = expand.grid(NA, NA, NA, NA, NA, NA, NA, stringsAsFactors=F)
+  colnames(today_games) = c("gamePk", "Home", "Away", "Home Goals",	"Away Goals", "Status")
 }
 
-
-## boxscores
-home_boxscore = nhl_games(2021020001, "boxscore")[[1]][[2]][[2]]
-away_boxscore = nhl_games(2021020001, "boxscore")[[1]][[2]][[1]]
+today_games$Home = active_team_roster_team_info$teamName[match(today_games$Home, active_team_roster_team_info$name)]
+today_games$Away = active_team_roster_team_info$teamName[match(today_games$Away, active_team_roster_team_info$name)]
 
 
-get_live_player_stats = function(i, df_box){
-
-  df_box_i = df_box[[3]][[i]]
-
-  if(df_box_i[3][[1]]$type %in% c("Forward","Defenseman")){
-    df_box_stats = data.frame(t(unlist(df_box_i[4][[1]]$skaterStats)), stringsAsFactors = F)
-    df_box_stats = df_box_stats[,colnames(df_box_stats) %in% c("goals","assists","powerPlayGoals","powerPlayAssits","shots","hits","blocked","plusMinus")]
-    df_box_stats$player_name = df_box_i[[1]]$fullName
-    df_box_stats$type = df_box_i[3][[1]]$type
-    df_box_stats$team_name = df_box_i[[1]]$currentTeam$name
-    return(df_box_stats)
-
-  } else if(df_box_i[3][[1]]$type == "Goalie") {
-    print(paste(i, " --> goalie"))
-
-  }else{ #sometimes there are "Uknown" ... probably when player is moved on or off line up
-    print(paste(i, " --> unknown"))
-  }
-
-}
-
-
-home = do.call(rbind, lapply(1:length(home_boxscore[[3]]), get_live_player_stats, home_boxscore))
-away = do.call(rbind, lapply(1:length(away_boxscore[[3]]), get_live_player_stats, away_boxscore))
-
-combined_game_stats = data.frame(rbind(home, away), stringsAsFactors = F)
-combined_game_stats[,1:6] = sapply(combined_game_stats[,1:6], as.numeric)
-
-combined_game_stats = combined_game_stats %>%
-  mutate(points = goals + assists) %>%
-  arrange(points) %>%
-  mutate(player_name = gsub("(^[a-zA-Z])(.+) (.+)", "\\3.\\1", player_name)) %>%
-  mutate(player_name = factor(player_name, player_name))
-
-# combined_game_stats$points = combined_game_stats$goals + combined_game_stats$assists 
-# 
-# combined_game_stats = combined_game_stats[order(combined_game_stats$points, decreasing = T),]
-# combined_game_stats$player_name = factor(combined_game_stats$player_name, levels = combined_game_stats$player_name)
-
-test = melt(setDT(combined_game_stats), measure.vars=c("points", "goals", "assists", "shots", "hits", "blocked"), id.vars=c("player_name","type", "team_name"))
-
-ggplot(test, aes(x=variable, y=player_name, fill=value, label=value)) +
-  geom_tile(color = "gray80", lwd = .25, linetype = 1, alpha = .9) +
-  scale_fill_gradient(low = "white", high = "red") +
-  geom_text(data = test[test$value != 0,], color = "gray15") + 
-  facet_wrap(~team_name, scales="free_y", ncol = 1) +
-  labs(y="Player", x="Statistic", fill="Count") +
-  theme(strip.background = element_rect(fill="#dae3eb", color="gray75"),
-        strip.text = element_text(size=11), 
-        panel.background = element_rect(fill = "white", color="gray75"),
-        axis.text = element_text(size=10))
-        # axis.text.x = element_text(angle=45, hjust=1))
-
-
-# colnames(df_box_index) = gsub("(ID.+)\\.(.+)", "\\2", colnames(df_box_index))
-# df_box_index = df_box_index[,c("fullName","name","type",33:)]
-# select(1:2,24:27,29:52)
 
 
 ## ------------------------------------------------------------------------------------------------------------------------------
@@ -366,12 +308,41 @@ server = function(input, output) {
   ## -----------------------------------------------------------------------------------
   #### Games stats ####
 
-  output$live_game_table = renderTable({
-    # ifelse(class(today_games) == "data.frame", today_games[,-1], "Sorry, no game today.")
-    today_games[,-1]
-  }, bordered = T, spacing = "s", rownames=T, striped=T, digits=1
-  )
-
+  # output$live_game_table = renderTable({
+  #   today_games$Home = active_team_roster_team_info$teamName[match(today_games$Home, active_team_roster_team_info$name)]
+  #   today_games$Away = active_team_roster_team_info$teamName[match(today_games$Away, active_team_roster_team_info$name)]
+  #   today_games[,-1]
+  # }, bordered = T, spacing = "s", rownames=T, striped=T, digits=1
+  # )
+  
+  output$live_game_table = renderFormattable({
+    
+  customRange = c(0, max(today_games$`Away Goals`, max(today_games$`Home Goals`))) # custom min / max values
+  colors = csscolor(gradient(as.numeric(c(customRange, today_games$`Home Goals`)), "white", "#f2e200"))
+  colors = colors[-(1:2)] ## remove colors for min/max
+  
+  colors2 = csscolor(gradient(as.numeric(c(customRange, today_games$`Away Goals`)), "white", "#5a9157"))
+  colors2 = colors2[-(1:2)] ## remove colors for min/max
+  
+  
+  fmt = formatter("span", 
+                  style = function(x){
+                    style(display = "block",
+                          padding = "0 4px",
+                          `border-radius` = "4px",
+                          `background-color` = colors)})
+  
+  fmt2 = formatter("span", 
+                   style = function(x){
+                     style(display = "block",
+                           padding = "0 4px",
+                           `border-radius` = "4px",
+                           `background-color` = colors2)})
+  
+  formattable(today_games[,-1], list(
+    `Home Goals` = fmt,
+    `Away Goals` = fmt2))
+  })
 
 
   output$live_game_plot = renderPlot({
@@ -380,32 +351,72 @@ server = function(input, output) {
       mutate(user_selection_key = paste0(today_games$Home, " vs ", today_games$Away))
     data = data[data$user_selection_key == as.character(input$game_user_selected),]
 
-    ## get game data based on user selection
-    game_data = nhl_games(data$gamePk, "linescore")[[1]]
-    game_data = rbind(data.frame(game_data[[7]][[1]]), data.frame(game_data[[7]][[2]]))
-
-    ggplot(game_data, aes(x=team.name, y=shotsOnGoal, fill=team.name)) + geom_bar(stat="identity") +
-      theme_bw() +
-      labs(x="Team") +
-      scale_fill_manual(values=c("#6BAED6", "#08519C")) +
-      coord_flip() +
-      theme(title = element_text(size=11),
-            axis.text = element_text(size=14),
-            axis.title = element_text(size=15),
-            legend.text = element_text(size=13),
-            legend.position = "right")
-
+    ## get liver player stats
+    get_live_player_stats = function(i, df_box){
+      df_box_i = df_box[[3]][[i]]
+      if(df_box_i[3][[1]]$type %in% c("Forward","Defenseman")){
+        df_box_stats = data.frame(t(unlist(df_box_i[4][[1]]$skaterStats)), stringsAsFactors = F)
+        df_box_stats = df_box_stats[,colnames(df_box_stats) %in% c("goals","assists","powerPlayGoals","powerPlayAssists","shots","hits","blocked","plusMinus")]
+        df_box_stats$player_name = df_box_i[[1]]$fullName
+        df_box_stats$type = df_box_i[3][[1]]$type
+        df_box_stats$team_name = df_box_i[[1]]$currentTeam$name
+        return(df_box_stats)
+        
+      } else if(df_box_i[3][[1]]$type == "Goalie") {
+        # df_box_stats = data.frame(t(unlist(df_box_i[4][[1]]$goalieStats)), stringsAsFactors = F)
+        # df_box_stats = df_box_stats[,colnames(df_box_stats) %in% c("shots","saves","savePercentage")]
+        # df_box_stats$player_name = df_box_i[[1]]$fullName
+        # df_box_stats$type = df_box_i[3][[1]]$type
+        # df_box_stats$team_name = df_box_i[[1]]$currentTeam$name
+        # return(df_box_stats)
+        
+      }else{ #sometimes there are "Unknown" ... probably when player is moved on or off line up
+        # print(paste(i, " --> unknown"))
+      }
+    }
+    
+    get_home_away_pstats = function(n, game_id){
+      home_or_away_boxscore = nhl_games(game_id, "boxscore")[[1]][[2]][[n]] # 2 = home, 1 = away
+      home_or_away_player_stats = do.call(rbind, lapply(1:length(home_or_away_boxscore[[3]]), get_live_player_stats, home_or_away_boxscore))
+      # print(dim(home_or_away_player_stats))
+      return(home_or_away_player_stats)
+    }
+    
+    combined_game_stats = do.call(rbind, lapply(1:2, get_home_away_pstats, game_id = data$gamePk))
+    combined_game_stats[,1:8] = sapply(combined_game_stats[,1:8], as.numeric)
+    combined_game_stats = combined_game_stats %>%
+      mutate(points = goals + assists) %>%
+      arrange(points) %>%
+      mutate(player_name = gsub("(^[a-zA-Z])(.+) (.+)", "\\3.\\1", player_name)) %>%
+      mutate(player_name = factor(player_name, player_name))
+    combined_game_stats$home_or_away = ifelse(combined_game_stats$team_name %in% data$Home, "Home", "Away")
+    
+    ## make data long to plot
+    melt_combined_game_stats = melt(setDT(combined_game_stats), measure.vars=c("points", "goals", "assists", "shots", "hits", "blocked", "plusMinus"), 
+                id.vars=c("player_name","type", "team_name", "home_or_away"))
+    melt_combined_game_stats$home_or_away = factor(melt_combined_game_stats$home_or_away, levels=c("Home", "Away"))
+    
+    ## plot
+    ggplot(melt_combined_game_stats, aes(x=variable, y=player_name, fill=value, label=value)) +
+      geom_tile(color = "gray80", lwd = .25, linetype = 1, alpha = .9) +
+      scale_fill_gradient2(low = "#075AFF", mid = "#FFFFFF", high = "#FF0000") +
+      geom_text(data = melt_combined_game_stats[melt_combined_game_stats$value != 0,], color = "gray15") + 
+      facet_wrap(~home_or_away + team_name, scales="free_y", ncol = 2) +
+      labs(y="Player", x="Statistic", fill="Count") +
+      theme(strip.background = element_rect(fill="gray95", color="gray75"),
+            strip.text = element_text(size=13, color="black", face="bold"), 
+            panel.background = element_rect(fill = "white", color="gray75"),
+            axis.text = element_text(size=12),
+            axis.text.x = element_text(angle=45, hjust=1, size=13),
+            axis.title = element_text(size=14),
+            legend.text = element_text(size=11),
+            legend.title = element_text(size=12))
   })
 
 
 
 
-
-
-
-
-
-
+  ## -----------------------------------------------------------------------------------
   #### Total team stats ####
   # tts_x_us = reactive({input$total_team_stats_x_user_selected})
   # tts_y_us = reactive({input$total_team_stats_y_user_selected})
@@ -513,11 +524,11 @@ ui = fluidPage(
     ## -------------------------------------------------------------------------
     tabPanel("Live Games",
              div(
+               column(8, offset=2,
                h3("Overview"),
-               tableOutput("live_game_table"),
-               align="center", style='padding:1em;'
-             )
-             fluidRow(
+               formattableOutput("live_game_table"),
+               align="center", style='padding:1em;')),
+             div(
                column(6,
                  selectInput("game_user_selected", "Select Game:", choices=paste0(today_games$Home, " vs ", today_games$Away)))),
              div(align="center", style='padding:1em 2em',
@@ -526,57 +537,57 @@ ui = fluidPage(
             ),
 
     ## -------------------------------------------------------------------------
-      tabPanel("Blog",
-                fluidRow(
-                  titlePanel(h1("Gallery", align = "center")),
-                  titlePanel(h4(tags$a(href="https://medium.com/hockey-stats", "Making sense of the game."), align = "center")),
-                  br(),
-                  column(3, style='padding:1.2em;',
-                         tags$a(img(src = "040122_hc.png", height = "100%", width = "100%"),
-                                href="https://medium.com/hockey-stats/comparing-current-nhl-superstars-with-nhl-all-time-greats-650af0ba0f87"),
-                         tags$a(h5("Comparing Current NHL Superstars with NHL All-Time Greats", align = "center", style="color:black"),
-                                href="https://medium.com/hockey-stats/comparing-current-nhl-superstars-with-nhl-all-time-greats-650af0ba0f87")),
-                  column(3, style='padding:1.2em;',
-                         tags$a(img(src = "040122_gf_gp_over_time.png", height = "100%", width = "100%"),
-                                href="https://medium.com/hockey-stats/how-has-regular-season-nhl-goal-scoring-changed-over-time-733c6b527c8d"),
-                         tags$a(h5("How has regular season NHL goal scoring changed over time?", align = "center", style="color:black"),
-                                href="https://medium.com/hockey-stats/how-has-regular-season-nhl-goal-scoring-changed-over-time-733c6b527c8d")),
-                  column(3, style='padding:1.2em;',
-                         tags$a(img(src = "040122_shap.png", height = "100%", width = "100%"),
-                                href="https://medium.com/hockey-stats/identifying-the-best-predictors-of-nhl-game-outcomes-using-random-forest-b4c11f46bc97"),
-                         tags$a(h5("Identifying the Best Predictors of NHL Game Outcomes Using Random Forest", align = "center", style="color:black"),
-                                href="https://medium.com/hockey-stats/identifying-the-best-predictors-of-nhl-game-outcomes-using-random-forest-b4c11f46bc97")),
-                  column(3, style='padding:1.2em;',
-                         tags$a(img(src = "040122_cap_hit.png", height = "100%", width = "100%"),
-                                href="https://medium.com/hockey-stats/the-best-and-worst-value-nhl-skaters-will-mitch-marner-top-a-list-5d0667f5a53c"),
-                         tags$a(h5("The Best and Worst Value NHL Skaters - Will Mitch Marner Top a List?", align = "center", style="color:black"),
-                                href="https://medium.com/hockey-stats/the-best-and-worst-value-nhl-skaters-will-mitch-marner-top-a-list-5d0667f5a53c"))),
-
+    tabPanel("Blog",
               fluidRow(
+                titlePanel(h1("Gallery", align = "center")),
+                titlePanel(h4(tags$a(href="https://medium.com/hockey-stats", "Making sense of the game."), align = "center")),
+                br(),
                 column(3, style='padding:1.2em;',
-                         tags$a(img(src = "code_example_cropped.png", height = "100%", width = "100%"),
-                                href="https://medium.com/hockey-stats/two-approaches-to-scrape-data-from-capfriendly-using-rselenium-and-rvest-ab29c08e314f"),
-                         tags$a(h5("Two Approaches to Scrape Data From CapFriendly Using RSelenium and rvest", align = "center", style="color:black"),
-                                href="https://medium.com/hockey-stats/two-approaches-to-scrape-data-from-capfriendly-using-rselenium-and-rvest-ab29c08e314f")),
+                       tags$a(img(src = "040122_hc.png", height = "100%", width = "100%"),
+                              href="https://medium.com/hockey-stats/comparing-current-nhl-superstars-with-nhl-all-time-greats-650af0ba0f87"),
+                       tags$a(h5("Comparing Current NHL Superstars with NHL All-Time Greats", align = "center", style="color:black"),
+                              href="https://medium.com/hockey-stats/comparing-current-nhl-superstars-with-nhl-all-time-greats-650af0ba0f87")),
                 column(3, style='padding:1.2em;',
-                       tags$a(img(src = "code_example_cropped.png", height = "100%", width = "100%"),
-                              href="https://medium.com/hockey-stats/how-to-scrape-nhl-com-dynamic-data-in-r-using-rvest-and-rselenium-ba3b5d87c728"),
-                       tags$a(h5("How to Scrape (NHL.com) Dynamic Data in R Using rvest and RSelenium", align = "center", style="color:black"),
-                              href="https://medium.com/hockey-stats/how-to-scrape-nhl-com-dynamic-data-in-r-using-rvest-and-rselenium-ba3b5d87c728")),
+                       tags$a(img(src = "040122_gf_gp_over_time.png", height = "100%", width = "100%"),
+                              href="https://medium.com/hockey-stats/how-has-regular-season-nhl-goal-scoring-changed-over-time-733c6b527c8d"),
+                       tags$a(h5("How has regular season NHL goal scoring changed over time?", align = "center", style="color:black"),
+                              href="https://medium.com/hockey-stats/how-has-regular-season-nhl-goal-scoring-changed-over-time-733c6b527c8d")),
                 column(3, style='padding:1.2em;',
-                       tags$a(img(src = "040122_sog_cf.png", height = "100%", width = "100%"),
-                              href="https://medium.com/hockey-stats/are-shot-attempts-and-shots-on-goal-meaningful-predictors-of-nhl-game-outcomes-not-really-f8f8d16811bf"),
-                       tags$a(h5("Are Shot Attempts and Shots on Goal Alone Meaningful Predictors of NHL Game Outcomes? Not Really.", align = "center", style="color:black"),
-                              href="https://medium.com/hockey-stats/are-shot-attempts-and-shots-on-goal-meaningful-predictors-of-nhl-game-outcomes-not-really-f8f8d16811bf")),
+                       tags$a(img(src = "040122_shap.png", height = "100%", width = "100%"),
+                              href="https://medium.com/hockey-stats/identifying-the-best-predictors-of-nhl-game-outcomes-using-random-forest-b4c11f46bc97"),
+                       tags$a(h5("Identifying the Best Predictors of NHL Game Outcomes Using Random Forest", align = "center", style="color:black"),
+                              href="https://medium.com/hockey-stats/identifying-the-best-predictors-of-nhl-game-outcomes-using-random-forest-b4c11f46bc97")),
                 column(3, style='padding:1.2em;',
-                       tags$a(img(src = "040122_cf_rel_bars.png", height = "100%", width = "100%"),
-                              href="https://medium.com/hockey-stats/advanced-hockey-stats-101-corsi-part-1-of-4-29d0a9fb1f95"),
-                       tags$a(h5("Advanced Hockey Stats 101: Corsi (Part 1 of 4)", align = "center", style="color:black"),
-                              href="https://medium.com/hockey-stats/advanced-hockey-stats-101-corsi-part-1-of-4-29d0a9fb1f95"))
-                    ),
-              br()
+                       tags$a(img(src = "040122_cap_hit.png", height = "100%", width = "100%"),
+                              href="https://medium.com/hockey-stats/the-best-and-worst-value-nhl-skaters-will-mitch-marner-top-a-list-5d0667f5a53c"),
+                       tags$a(h5("The Best and Worst Value NHL Skaters - Will Mitch Marner Top a List?", align = "center", style="color:black"),
+                              href="https://medium.com/hockey-stats/the-best-and-worst-value-nhl-skaters-will-mitch-marner-top-a-list-5d0667f5a53c"))),
 
-              )
+            fluidRow(
+              column(3, style='padding:1.2em;',
+                       tags$a(img(src = "code_example_cropped.png", height = "100%", width = "100%"),
+                              href="https://medium.com/hockey-stats/two-approaches-to-scrape-data-from-capfriendly-using-rselenium-and-rvest-ab29c08e314f"),
+                       tags$a(h5("Two Approaches to Scrape Data From CapFriendly Using RSelenium and rvest", align = "center", style="color:black"),
+                              href="https://medium.com/hockey-stats/two-approaches-to-scrape-data-from-capfriendly-using-rselenium-and-rvest-ab29c08e314f")),
+              column(3, style='padding:1.2em;',
+                     tags$a(img(src = "code_example_cropped.png", height = "100%", width = "100%"),
+                            href="https://medium.com/hockey-stats/how-to-scrape-nhl-com-dynamic-data-in-r-using-rvest-and-rselenium-ba3b5d87c728"),
+                     tags$a(h5("How to Scrape (NHL.com) Dynamic Data in R Using rvest and RSelenium", align = "center", style="color:black"),
+                            href="https://medium.com/hockey-stats/how-to-scrape-nhl-com-dynamic-data-in-r-using-rvest-and-rselenium-ba3b5d87c728")),
+              column(3, style='padding:1.2em;',
+                     tags$a(img(src = "040122_sog_cf.png", height = "100%", width = "100%"),
+                            href="https://medium.com/hockey-stats/are-shot-attempts-and-shots-on-goal-meaningful-predictors-of-nhl-game-outcomes-not-really-f8f8d16811bf"),
+                     tags$a(h5("Are Shot Attempts and Shots on Goal Alone Meaningful Predictors of NHL Game Outcomes? Not Really.", align = "center", style="color:black"),
+                            href="https://medium.com/hockey-stats/are-shot-attempts-and-shots-on-goal-meaningful-predictors-of-nhl-game-outcomes-not-really-f8f8d16811bf")),
+              column(3, style='padding:1.2em;',
+                     tags$a(img(src = "040122_cf_rel_bars.png", height = "100%", width = "100%"),
+                            href="https://medium.com/hockey-stats/advanced-hockey-stats-101-corsi-part-1-of-4-29d0a9fb1f95"),
+                     tags$a(h5("Advanced Hockey Stats 101: Corsi (Part 1 of 4)", align = "center", style="color:black"),
+                            href="https://medium.com/hockey-stats/advanced-hockey-stats-101-corsi-part-1-of-4-29d0a9fb1f95"))
+                  ),
+            br()
+
+            )
         )
    )
 

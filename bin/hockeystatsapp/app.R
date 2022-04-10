@@ -378,7 +378,6 @@ server = function(input, output) {
     get_home_away_pstats = function(n, game_id){
       home_or_away_boxscore = nhl_games(game_id, "boxscore")[[1]][[2]][[n]] # 2 = home, 1 = away
       home_or_away_player_stats = do.call(rbind, lapply(1:length(home_or_away_boxscore[[3]]), get_live_player_stats, home_or_away_boxscore))
-      # print(dim(home_or_away_player_stats))
       return(home_or_away_player_stats)
     }
     
@@ -389,6 +388,9 @@ server = function(input, output) {
       arrange(points) %>%
       mutate(player_name = gsub("(^[a-zA-Z])(.+) (.+)", "\\3.\\1", player_name)) %>%
       mutate(player_name = factor(player_name, player_name))
+    
+    ## rename with short form
+    combined_game_stats$team_name = active_team_roster_team_info$teamName[match(combined_game_stats$team_name, active_team_roster_team_info$name)]
     combined_game_stats$home_or_away = ifelse(combined_game_stats$team_name %in% data$Home, "Home", "Away")
     
     ## make data long to plot
@@ -401,7 +403,7 @@ server = function(input, output) {
       geom_tile(color = "gray80", lwd = .25, linetype = 1, alpha = .9) +
       scale_fill_gradient2(low = "#075AFF", mid = "#FFFFFF", high = "#FF0000") +
       geom_text(data = melt_combined_game_stats[melt_combined_game_stats$value != 0,], color = "gray15") + 
-      facet_wrap(~home_or_away + team_name, scales="free_y", ncol = 2) +
+      facet_wrap(~home_or_away + team_name, scales="free_y", ncol = 1) +
       labs(y="Player", x="Statistic", fill="Count") +
       theme(strip.background = element_rect(fill="gray95", color="gray75"),
             strip.text = element_text(size=13, color="black", face="bold"), 
@@ -525,15 +527,15 @@ ui = fluidPage(
     tabPanel("Live Games",
              div(
                column(8, offset=2,
-               h3("Overview"),
+               h1("Overview", style='padding-bottom:.5em'),
                formattableOutput("live_game_table"),
                align="center", style='padding:1em;')),
-             div(
-               column(6,
+             fluidRow(
+               column(3,
                  selectInput("game_user_selected", "Select Game:", choices=paste0(today_games$Home, " vs ", today_games$Away)))),
-             div(align="center", style='padding:1em 2em',
-                 plotOutput("live_game_plot")
-                )
+             fluidRow(style='padding-bottom: 1em',
+               column(8, offset=2, style='padding:0 1em',
+                 plotOutput("live_game_plot", height = "700px")))
             ),
 
     ## -------------------------------------------------------------------------

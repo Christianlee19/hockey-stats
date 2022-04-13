@@ -102,25 +102,27 @@ team_vars = sort(unique(colnames(team_stats)))
 team_vars = team_vars[!(team_vars %in% c("division.name","team.name"))]
 
 
-today_schedule = nhl_schedule_today()[[1]]
-today_games = today_schedule[[8]]$games[[1]] %>%
-  select(c(gamePk, teams.home.team.name, teams.away.team.name, teams.home.score, teams.away.score, gameDate, status.abstractGameState)) %>%
-  mutate(gameDate = as.numeric(gsub("(.+)T([0-9][0-9]):([0-9][0-9]):(.+)", "\\2\\3", gameDate))) %>%
-  mutate(gameDate = ifelse(gameDate >= 1800, paste0(gameDate - 1700, "pm"), 
-                           ifelse(gameDate < 1700, paste0(gameDate - 500, "am"), paste0(gameDate - 500, "pm")))) %>%
-  mutate(gameDate = gsub("(.+)([0-9][0-9].+)", "\\1:\\2", gameDate))
+# today_schedule = nhl_schedule_today()[[1]]
+# today_games = today_schedule[[8]]$games[[1]] %>%
+#   select(c(gamePk, teams.home.team.name, teams.away.team.name, teams.home.score, teams.away.score, gameDate, status.abstractGameState)) %>%
+#   mutate(gameDate = as.numeric(gsub("(.+)T([0-9][0-9]):([0-9][0-9]):(.+)", "\\2\\3", gameDate))) %>%
+#   mutate(gameDate = ifelse(gameDate >= 1800, paste0(gameDate - 1700, "pm"), 
+#                            ifelse(gameDate < 1700, paste0(gameDate - 500, "am"), paste0(gameDate - 500, "pm")))) %>%
+#   mutate(gameDate = gsub("(.+)([0-9][0-9].+)", "\\1:\\2", gameDate))
 
 
 
 #### game data ####
 today_schedule = nhl_schedule_today()[[1]]
 if(today_schedule$totalGames >= 1){
+  today_schedule = nhl_schedule_today()[[1]]
   today_games = today_schedule[[8]]$games[[1]] %>%
-    select(c(gamePk, teams.home.team.name, teams.away.team.name, teams.home.score, teams.away.score, status.abstractGameState, gameDate)) %>%
-    mutate(gameDate = as.numeric(gsub("(.+)T([0-9][0-9]):([0-9][0-9]):(.+)", "\\2\\3", gameDate))) %>%
-    mutate(gameDate = ifelse(gameDate >= 1800, paste0(gameDate - 1700, "pm"), 
-                             ifelse(gameDate < 1700, paste0(gameDate - 500, "am"), paste0(gameDate - 500, "pm")))) %>%
-    mutate(gameDate = gsub("(.+)([0-9][0-9].+)", "\\1:\\2", gameDate))
+    select(c(gamePk, teams.home.team.name, teams.away.team.name, teams.home.score, teams.away.score, gameDate, status.abstractGameState)) %>%
+    mutate(gameDate = gsub("(.+)T([0-9][0-9]):([0-9][0-9]):(.+)", "\\2:\\3", gameDate)) %>%
+    mutate(gameDate = as.POSIXct(gameDate, tz = "UTC", format = "%H:%M")) %>%
+    mutate(gameDate = format(gameDate, tz="America/Chicago", usetz=F)) %>%
+    mutate(gameDate = gsub("(.+) (.+)", "\\2", gameDate)) %>%
+    mutate(gameDate = format(strptime(gameDate, "%H:%M:%S"), "%I:%M%p"))
   colnames(today_games)[-1] = c("Home", "Away", "Home Goals",	"Away Goals", "Status (cst)", "Time")
   
 } else{
@@ -375,7 +377,9 @@ server = function(input, output) {
         return(home_or_away_player_stats)
       } 
       else{
-        output$live_game_message = renderText({"API is not yet updated. Please come back later to see plots."})
+        output$live_game_message = renderText({
+          paste("Waiting on the API to update.",
+                "Please come back later to see the plots.", sep="\n")})
         return(NULL)
       }
     }
@@ -517,22 +521,6 @@ server = function(input, output) {
 ui = fluidPage(
   navbarPage("Hockey Stats",
              
-             tabPanel("Live Games",
-                      fluidRow(
-                        column(8, offset=2,
-                               h1("Overview", style='padding-bottom:.5em'),
-                               formattableOutput("live_game_table", width = "100%"),
-                               align="center", style='padding:1em;')),
-                      fluidRow(
-                        column(3,
-                               selectInput("game_user_selected", "Select Game:", 
-                                           choices=paste0(today_games$Home, " vs ", today_games$Away)))),
-                      fluidRow(style='padding-bottom: 1em',
-                               column(8, offset=2, style='padding:0 1em', align="center",
-                                      textOutput("live_game_message"),
-                                      plotOutput("live_game_plot", height = "800px")))
-             ),
-             
 ## -------------------------------------------------------------------------        
     navbarMenu("Player Stats",
       tabPanel("Season Totals",
@@ -580,6 +568,23 @@ ui = fluidPage(
         column(1))),
       tabPanel("Per game",
           "Coming soon.")),
+
+    ## -------------------------------------------------------------------------
+    tabPanel("Live Games",
+             fluidRow(
+               column(8, offset=2,
+                      h1("Overview", style='padding-bottom:.5em'),
+                      formattableOutput("live_game_table", width = "100%"),
+                      align="center", style='padding:1em;')),
+             fluidRow(
+               column(3,
+                      selectInput("game_user_selected", "Select Game:", 
+                                  choices=paste0(today_games$Home, " vs ", today_games$Away)))),
+             fluidRow(style='padding-bottom: 1em',
+                      column(8, offset=2, style='padding:0 1em', align="center",
+                             verbatimTextOutput("live_game_message"),
+                             plotOutput("live_game_plot", height = "800px")))
+    ),
 
     
     ## -------------------------------------------------------------------------

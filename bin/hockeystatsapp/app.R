@@ -260,7 +260,7 @@ server = function(input, output) {
       coord_flip() +
       scale_colour_manual(name=NULL, values=c(`Player A`="#d41102", `Player B`="#08519C")) +
       theme(title = element_text(size=11),
-            axis.text = element_text(size=14),
+            axis.text = element_text(size=14, color="gray10"),
             axis.title = element_text(size=15),
             legend.text = element_text(size=13),
             legend.position = "bottom")
@@ -340,122 +340,125 @@ server = function(input, output) {
 
 
   output$live_game_plot = renderPlot({
-
-    data = today_games %>%
-      mutate(user_selection_key = paste0(today_games$Home, " vs ", today_games$Away))
-    data = data[data$user_selection_key == as.character(input$game_user_selected),,drop=F]
-
-    ## get liver player stats
-    get_live_player_stats = function(i, df_box){
-      df_box_i = df_box[[3]][[i]]
-      if(df_box_i[3][[1]]$type %in% c("Forward","Defenseman")){
-        df_box_stats = data.frame(t(unlist(df_box_i[4][[1]]$skaterStats)), stringsAsFactors = F)
-        df_box_stats = df_box_stats[,colnames(df_box_stats) %in% c("goals","assists","powerPlayGoals","powerPlayAssists","shots","hits","blocked","plusMinus")]
-        df_box_stats$player_name = df_box_i[[1]]$fullName
-        df_box_stats$type = df_box_i[3][[1]]$type
-        df_box_stats$team_name = df_box_i[[1]]$currentTeam$name
-        return(df_box_stats)
-        
-      } else if(df_box_i[3][[1]]$type == "Goalie") {
-        # df_box_stats = data.frame(t(unlist(df_box_i[4][[1]]$goalieStats)), stringsAsFactors = F)
-        # df_box_stats = df_box_stats[,colnames(df_box_stats) %in% c("shots","saves","savePercentage")]
-        # df_box_stats$player_name = df_box_i[[1]]$fullName
-        # df_box_stats$type = df_box_i[3][[1]]$type
-        # df_box_stats$team_name = df_box_i[[1]]$currentTeam$name
-        # return(df_box_stats)
-        
-      }else{ #sometimes there are "Unknown" ... probably when player is moved on or off line up
-        # print(paste(i, " --> unknown"))
+    
+    if(as.character(input$game_user_selected) != "NA vs NA"){
+      
+      data = today_games %>%
+        mutate(user_selection_key = paste0(today_games$Home, " vs ", today_games$Away))
+      data = data[data$user_selection_key == as.character(input$game_user_selected),,drop=F]
+  
+      ## get liver player stats
+      get_live_player_stats = function(i, df_box){
+        df_box_i = df_box[[3]][[i]]
+        if(df_box_i[3][[1]]$type %in% c("Forward","Defenseman")){
+          df_box_stats = data.frame(t(unlist(df_box_i[4][[1]]$skaterStats)), stringsAsFactors = F)
+          df_box_stats = df_box_stats[,colnames(df_box_stats) %in% c("goals","assists","powerPlayGoals","powerPlayAssists","shots","hits","blocked","plusMinus")]
+          df_box_stats$player_name = df_box_i[[1]]$fullName
+          df_box_stats$type = df_box_i[3][[1]]$type
+          df_box_stats$team_name = df_box_i[[1]]$currentTeam$name
+          return(df_box_stats)
+          
+        } else if(df_box_i[3][[1]]$type == "Goalie") {
+          # df_box_stats = data.frame(t(unlist(df_box_i[4][[1]]$goalieStats)), stringsAsFactors = F)
+          # df_box_stats = df_box_stats[,colnames(df_box_stats) %in% c("shots","saves","savePercentage")]
+          # df_box_stats$player_name = df_box_i[[1]]$fullName
+          # df_box_stats$type = df_box_i[3][[1]]$type
+          # df_box_stats$team_name = df_box_i[[1]]$currentTeam$name
+          # return(df_box_stats)
+          
+        }else{ #sometimes there are "Unknown" ... probably when player is moved on or off line up
+          # print(paste(i, " --> unknown"))
+        }
       }
-    }
-    
-    get_home_away_pstats = function(n, game_id){
-      home_or_away_boxscore = nhl_games(game_id, "boxscore")[[1]][[2]][[n]] # 2 = home, 1 = away
       
-      if(length(home_or_away_boxscore[[3]]) > 0){
-        home_or_away_player_stats = do.call(rbind, lapply(1:length(home_or_away_boxscore[[3]]), get_live_player_stats, home_or_away_boxscore))
-        return(home_or_away_player_stats)
-      } 
-      else{
-        output$live_game_message = renderText({
-          paste("Waiting on the API to update.",
-                "Please come back later to see the plots.", sep="\n")})
-        return(NULL)
+      get_home_away_pstats = function(n, game_id){
+        home_or_away_boxscore = nhl_games(game_id, "boxscore")[[1]][[2]][[n]] # 2 = home, 1 = away
+        
+        if(length(home_or_away_boxscore[[3]]) > 0){
+          home_or_away_player_stats = do.call(rbind, lapply(1:length(home_or_away_boxscore[[3]]), get_live_player_stats, home_or_away_boxscore))
+          return(home_or_away_player_stats)
+        } 
+        else{
+          output$live_game_message = renderText({
+            paste("Waiting on the API to update.",
+                  "Please come back later to see the plots.", sep="\n")})
+          return(NULL)
+        }
       }
-    }
-    
-    combined_game_stats = do.call(rbind, lapply(1:2, get_home_away_pstats, game_id = data$gamePk))
-    
-    
-    if(!is.null(combined_game_stats)){
       
-      combined_game_stats[,1:8] = sapply(combined_game_stats[,1:8], as.numeric)
-      combined_game_stats = combined_game_stats %>%
-        mutate(points = goals + assists) %>%
-        arrange(points) %>%
-        mutate(player_name = gsub("(^[a-zA-Z])(.+) (.+)", "\\3.\\1", player_name)) %>%
-        mutate(player_name = factor(player_name, player_name))
+      combined_game_stats = do.call(rbind, lapply(1:2, get_home_away_pstats, game_id = data$gamePk))
       
-      ## rename with short form
-      combined_game_stats$team_name = active_team_roster_team_info$teamName[match(combined_game_stats$team_name, active_team_roster_team_info$name)]
-      combined_game_stats$home_or_away = ifelse(combined_game_stats$team_name %in% data$Home, "Home", "Away")
       
-      ## make data long to plot
-      melt_combined_game_stats = melt(setDT(combined_game_stats), measure.vars=c("points", "goals", "assists", "shots", "hits", "blocked", "plusMinus"), 
-                  id.vars=c("player_name","type", "team_name", "home_or_away"))
-      # melt_combined_game_stats$home_or_away = factor(melt_combined_game_stats$home_or_away, levels=c("Home", "Away"))
-      
-      ## plot
-      # ggplot(melt_combined_game_stats, aes(x=variable, y=player_name, fill=value, label=value)) +
-      #   geom_tile(color = "gray80", lwd = .25, linetype = 1, alpha = .9) +
-      #   scale_fill_gradient2(low = "#075AFF", mid = "#FFFFFF", high = "#FF0000") +
-      #   geom_text(data = melt_combined_game_stats[melt_combined_game_stats$value != 0,], color = "gray15") + 
-      #   facet_wrap(~home_or_away + team_name, scales="free_y", ncol = 1, strip.position=c("right")) +
-      #   labs(y="Player", x="Statistic", fill="Count") +
-      #   scale_x_discrete(position = c("top","bottom")) +
-      #   theme(strip.background = element_rect(fill="gray95", color="gray75"),
-      #         strip.text = element_text(size=13, color="black", face="bold"), 
-      #         panel.background = element_rect(fill = "white", color="gray75"),
-      #         axis.text = element_text(size=12),
-      #         axis.text.x = element_text(angle=45, hjust=1, size=13),
-      #         axis.title = element_text(size=14),
-      #         legend.text = element_text(size=11),
-      #         legend.title = element_text(size=12))
-      
-      home = melt_combined_game_stats[melt_combined_game_stats$home_or_away == "Home",]
-      away = melt_combined_game_stats[melt_combined_game_stats$home_or_away == "Away",]
-      
-      home = ggplot(home, aes(x=variable, y=player_name, fill=value, label=value)) +
-        geom_tile(color = "gray80", lwd = .25, linetype = 1, alpha = .9) +
-        scale_fill_gradient2(low = "#075AFF", mid = "#FFFFFF", high = "#FF0000") +
-        geom_text(data = home[home$value != 0,], color = "gray15") + 
-        facet_wrap(~ team_name, strip.position=c("right")) +
-        labs(y="Player", x="Statistic", fill="Count") +
-        theme(strip.background = element_rect(fill="gray95", color="gray75"),
-              strip.text = element_text(size=13, color="black", face="bold"), 
-              panel.background = element_rect(fill = "white", color="gray75"),
-              axis.text = element_text(size=12),
-              axis.text.x = element_text(angle=45, hjust=1, size=13),
-              axis.title = element_text(size=14),
-              axis.title.x = element_blank(),
-              legend.position = "none")
+      if(!is.null(combined_game_stats)){
         
-      away = ggplot(away, aes(x=variable, y=player_name, fill=value, label=value)) +
-        geom_tile(color = "gray80", lwd = .25, linetype = 1, alpha = .9) +
-        scale_fill_gradient2(low = "#075AFF", mid = "#FFFFFF", high = "#FF0000") +
-        geom_text(data = away[away$value != 0,], color = "gray15") + 
-        facet_wrap(~ team_name, strip.position=c("right")) +
-        labs(y="Player", x="Statistic", fill="Count") +
-        theme(strip.background = element_rect(fill="gray95", color="gray75"),
-              strip.text = element_text(size=13, color="black", face="bold"), 
-              panel.background = element_rect(fill = "white", color="gray75"),
-              axis.text = element_text(size=12),
-              axis.text.x = element_text(angle=45, hjust=1, size=13),
-              axis.title = element_text(size=14),
-              legend.position = "none")
+        combined_game_stats[,1:8] = sapply(combined_game_stats[,1:8], as.numeric)
+        combined_game_stats = combined_game_stats %>%
+          mutate(points = goals + assists) %>%
+          arrange(points) %>%
+          mutate(player_name = gsub("(^[a-zA-Z])(.+) (.+)", "\\3.\\1", player_name)) %>%
+          mutate(player_name = factor(player_name, player_name))
         
-      ggarrange(home, away, ncol=1, common.legend = TRUE, legend="right")
-    }
+        ## rename with short form
+        combined_game_stats$team_name = active_team_roster_team_info$teamName[match(combined_game_stats$team_name, active_team_roster_team_info$name)]
+        combined_game_stats$home_or_away = ifelse(combined_game_stats$team_name %in% data$Home, "Home", "Away")
+        
+        ## make data long to plot
+        melt_combined_game_stats = melt(setDT(combined_game_stats), measure.vars=c("points", "goals", "assists", "shots", "hits", "blocked", "plusMinus"), 
+                    id.vars=c("player_name","type", "team_name", "home_or_away"))
+        # melt_combined_game_stats$home_or_away = factor(melt_combined_game_stats$home_or_away, levels=c("Home", "Away"))
+        
+        ## plot
+        # ggplot(melt_combined_game_stats, aes(x=variable, y=player_name, fill=value, label=value)) +
+        #   geom_tile(color = "gray80", lwd = .25, linetype = 1, alpha = .9) +
+        #   scale_fill_gradient2(low = "#075AFF", mid = "#FFFFFF", high = "#FF0000") +
+        #   geom_text(data = melt_combined_game_stats[melt_combined_game_stats$value != 0,], color = "gray15") + 
+        #   facet_wrap(~home_or_away + team_name, scales="free_y", ncol = 1, strip.position=c("right")) +
+        #   labs(y="Player", x="Statistic", fill="Count") +
+        #   scale_x_discrete(position = c("top","bottom")) +
+        #   theme(strip.background = element_rect(fill="gray95", color="gray75"),
+        #         strip.text = element_text(size=13, color="black", face="bold"), 
+        #         panel.background = element_rect(fill = "white", color="gray75"),
+        #         axis.text = element_text(size=12),
+        #         axis.text.x = element_text(angle=45, hjust=1, size=13),
+        #         axis.title = element_text(size=14),
+        #         legend.text = element_text(size=11),
+        #         legend.title = element_text(size=12))
+        
+        home = melt_combined_game_stats[melt_combined_game_stats$home_or_away == "Home",]
+        away = melt_combined_game_stats[melt_combined_game_stats$home_or_away == "Away",]
+        
+        home = ggplot(home, aes(x=variable, y=player_name, fill=value, label=value)) +
+          geom_tile(color = "gray80", lwd = .25, linetype = 1, alpha = .9) +
+          scale_fill_gradient2(low = "#075AFF", mid = "#FFFFFF", high = "#FF0000") +
+          geom_text(data = home[home$value != 0,], color = "gray15") + 
+          facet_wrap(~ team_name, strip.position=c("right")) +
+          labs(y="Player", x="Statistic", fill="Count") +
+          theme(strip.background = element_rect(fill="gray95", color="gray75"),
+                strip.text = element_text(size=13, color="black", face="bold"), 
+                panel.background = element_rect(fill = "white", color="gray75"),
+                axis.text = element_text(size=12, color="gray10"),
+                axis.text.x = element_text(angle=45, hjust=1, size=13),
+                axis.title = element_text(size=14),
+                axis.title.x = element_blank(),
+                legend.position = "none")
+          
+        away = ggplot(away, aes(x=variable, y=player_name, fill=value, label=value)) +
+          geom_tile(color = "gray80", lwd = .25, linetype = 1, alpha = .9) +
+          scale_fill_gradient2(low = "#075AFF", mid = "#FFFFFF", high = "#FF0000") +
+          geom_text(data = away[away$value != 0,], color = "gray15") + 
+          facet_wrap(~ team_name, strip.position=c("right")) +
+          labs(y="Player", x="Statistic", fill="Count") +
+          theme(strip.background = element_rect(fill="gray95", color="gray75"),
+                strip.text = element_text(size=13, color="black", face="bold"), 
+                panel.background = element_rect(fill = "white", color="gray75"),
+                axis.text = element_text(size=12, color="gray10"),
+                axis.text.x = element_text(angle=45, hjust=1, size=13),
+                axis.title = element_text(size=14),
+                legend.position = "none")
+          
+        ggarrange(home, away, ncol=1, common.legend = TRUE, legend="right")
+      }
+    } 
   })
 
   # output$live_game_message = renderText({
@@ -500,7 +503,7 @@ server = function(input, output) {
         theme_bw() +
         labs(x = charx, y=chary, fill = "Division Rank", title = "Hover Over Points!") +
         theme(title = element_text(size=10),
-              axis.text = element_text(size=11),
+              axis.text = element_text(size=11, color="gray10"),
               axis.title = element_text(size=13),
               legend.title = element_text(size=11), #change legend title font size
               legend.text = element_text(size=10))) %>%

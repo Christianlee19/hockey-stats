@@ -113,9 +113,12 @@ team_vars = team_vars[!(team_vars %in% c("division.name","team.name"))]
 
 
 #### game data ####
+#"https://statsapi.web.nhl.com/api/v1/schedule"
+# add "see yesterday's stats"
 today_schedule = nhl_schedule_today()[[1]]
+#******** (test) today_schedule = nhl_schedule_date_range(startDate = "2022-05-18", endDate = "2022-05-18")[[1]]
+
 if(today_schedule$totalGames >= 1){
-  today_schedule = nhl_schedule_today()[[1]]
   today_games = today_schedule[[8]]$games[[1]] %>%
     select(c(gamePk, teams.home.team.name, teams.away.team.name, teams.home.score, teams.away.score, gameDate, status.abstractGameState)) %>%
     mutate(gameDate = gsub("(.+)T([0-9][0-9]):([0-9][0-9]):(.+)", "\\2:\\3", gameDate)) %>%
@@ -135,7 +138,8 @@ today_games$Time = NULL
 today_games$Home = active_team_roster_team_info$teamName[match(today_games$Home, active_team_roster_team_info$name)]
 today_games$Away = active_team_roster_team_info$teamName[match(today_games$Away, active_team_roster_team_info$name)]
 
-
+## update today_games in case it is wrong
+# names(nhl_games_linescore(today_games$gamePk))
 
 
 ## ------------------------------------------------------------------------------------------------------------------------------
@@ -350,7 +354,9 @@ server = function(input, output) {
       ## get liver player stats
       get_live_player_stats = function(i, df_box){
         df_box_i = df_box[[3]][[i]]
-        if(df_box_i[3][[1]]$type %in% c("Forward","Defenseman")){
+        if(is.null(df_box_i[3][[1]]$type)){
+        
+        } else if(!is.null(df_box_i[3][[1]]$type) & df_box_i[3][[1]]$type %in% c("Forward","Defenseman")){
           df_box_stats = data.frame(t(unlist(df_box_i[4][[1]]$skaterStats)), stringsAsFactors = F)
           df_box_stats = df_box_stats[,colnames(df_box_stats) %in% c("goals","assists","powerPlayGoals","powerPlayAssists","shots","hits","blocked","plusMinus")]
           df_box_stats$player_name = df_box_i[[1]]$fullName
@@ -369,7 +375,7 @@ server = function(input, output) {
         }else{ #sometimes there are "Unknown" ... probably when player is moved on or off line up
           # print(paste(i, " --> unknown"))
         }
-      }
+      } 
       
       get_home_away_pstats = function(n, game_id){
         home_or_away_boxscore = nhl_games(game_id, "boxscore")[[1]][[2]][[n]] # 2 = home, 1 = away
@@ -568,9 +574,7 @@ ui = fluidPage(
           selectInput("total_team_stats_y_user_selected", "Y-axis:", choices=sort(unique(colnames(team_stats))),
                       selected="goalsAgainst")),
         column(8, plotlyOutput("teamPlot1")),
-        column(1))),
-      tabPanel("Per game",
-          "Coming soon.")),
+        column(1)))),
 
     ## -------------------------------------------------------------------------
     tabPanel("Live Games",

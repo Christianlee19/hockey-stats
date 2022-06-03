@@ -5,9 +5,9 @@ account: hockeystats
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 5994774
-bundleId: 5867153
+bundleId: 5973897
 url: https://calee.shinyapps.io/hockeystatsapp/
-when: 1651633931.5152
-lastSyncTime: 1651633931.51522
+when: 1654234659.9162
+lastSyncTime: 1654234659.91621
 asMultiple: FALSE
 asStatic: FALSE

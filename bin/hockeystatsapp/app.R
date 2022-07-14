@@ -116,6 +116,7 @@ team_vars = team_vars[!(team_vars %in% c("division.name","team.name"))]
 #"https://statsapi.web.nhl.com/api/v1/schedule"
 # add "see yesterday's stats"
 today_schedule = nhl_schedule_today()[[1]]
+
 #******** (test) today_schedule = nhl_schedule_date_range(startDate = "2022-05-18", endDate = "2022-05-18")[[1]]
 
 if(today_schedule$totalGames >= 1){
@@ -129,7 +130,22 @@ if(today_schedule$totalGames >= 1){
   colnames(today_games)[-1] = c("Home", "Away", "Home Goals",	"Away Goals", "Status (cst)", "Time")
   
 } else{
-  today_games = expand.grid(NA, NA, NA, NA, NA, NA, NA, stringsAsFactors=F)
+  ## get nearest date that is not current date
+  all_game_dates = as.Date(nhl_schedule_seasons(2021:2022)[[1]]$dates[[1]])
+  all_game_dates = all_game_dates[all_game_dates != Sys.Date()]
+  date_to_use = all_game_dates[which.min(abs(all_game_dates - Sys.Date()))]
+
+  ## get schedule as usual
+  today_schedule = nhl_schedule(startDate = date_to_use, endDate = date_to_use)[[1]]
+  today_games = today_schedule[[8]]$games[[1]] %>%
+    select(c(gamePk, teams.home.team.name, teams.away.team.name, teams.home.score, teams.away.score, gameDate, status.abstractGameState)) %>%
+    mutate(gameDate = gsub("(.+)T([0-9][0-9]):([0-9][0-9]):(.+)", "\\2:\\3", gameDate)) %>%
+    mutate(gameDate = as.POSIXct(gameDate, tz = "UTC", format = "%H:%M")) %>%
+    mutate(gameDate = format(gameDate, tz="America/Chicago", usetz=F)) %>%
+    mutate(gameDate = gsub("(.+) (.+)", "\\2", gameDate)) %>%
+    mutate(gameDate = format(strptime(gameDate, "%H:%M:%S"), "%I:%M%p"))
+  
+  #today_games = expand.grid(NA, NA, NA, NA, NA, NA, NA, stringsAsFactors=F)
   colnames(today_games) = c("gamePk", "Home", "Away", "Home Goals",	"Away Goals", "Status (cst)", "Time")
 }
 
@@ -382,6 +398,8 @@ server = function(input, output) {
         
         if(length(home_or_away_boxscore[[3]]) > 0){
           home_or_away_player_stats = do.call(rbind, lapply(1:length(home_or_away_boxscore[[3]]), get_live_player_stats, home_or_away_boxscore))
+          home_or_away_player_stats$home_or_away = ifelse(n == 1, "Away", "Home")
+          home_or_away_player_stats$team_name = ifelse(n == 1, data$Away, data$Home)
           return(home_or_away_player_stats)
         } 
         else{
@@ -405,31 +423,17 @@ server = function(input, output) {
           mutate(player_name = factor(player_name, player_name))
         
         ## rename with short form
-        combined_game_stats$team_name = active_team_roster_team_info$teamName[match(combined_game_stats$team_name, active_team_roster_team_info$name)]
-        combined_game_stats$home_or_away = ifelse(combined_game_stats$team_name %in% data$Home, "Home", "Away")
+        #combined_game_stats$team_name = active_team_roster_team_info$teamName[match(combined_game_stats$team_name, active_team_roster_team_info$name)]
+        
+        ## add Home and Away labels
+        #combined_game_stats$home_or_away = ifelse(combined_game_stats$team_name %in% data$Home, "Home", "Away")
         
         ## make data long to plot
         melt_combined_game_stats = melt(setDT(combined_game_stats), measure.vars=c("points", "goals", "assists", "shots", "hits", "blocked", "plusMinus"), 
                     id.vars=c("player_name","type", "team_name", "home_or_away"))
         # melt_combined_game_stats$home_or_away = factor(melt_combined_game_stats$home_or_away, levels=c("Home", "Away"))
         
-        ## plot
-        # ggplot(melt_combined_game_stats, aes(x=variable, y=player_name, fill=value, label=value)) +
-        #   geom_tile(color = "gray80", lwd = .25, linetype = 1, alpha = .9) +
-        #   scale_fill_gradient2(low = "#075AFF", mid = "#FFFFFF", high = "#FF0000") +
-        #   geom_text(data = melt_combined_game_stats[melt_combined_game_stats$value != 0,], color = "gray15") + 
-        #   facet_wrap(~home_or_away + team_name, scales="free_y", ncol = 1, strip.position=c("right")) +
-        #   labs(y="Player", x="Statistic", fill="Count") +
-        #   scale_x_discrete(position = c("top","bottom")) +
-        #   theme(strip.background = element_rect(fill="gray95", color="gray75"),
-        #         strip.text = element_text(size=13, color="black", face="bold"), 
-        #         panel.background = element_rect(fill = "white", color="gray75"),
-        #         axis.text = element_text(size=12),
-        #         axis.text.x = element_text(angle=45, hjust=1, size=13),
-        #         axis.title = element_text(size=14),
-        #         legend.text = element_text(size=11),
-        #         legend.title = element_text(size=12))
-        
+  
         home = melt_combined_game_stats[melt_combined_game_stats$home_or_away == "Home",]
         away = melt_combined_game_stats[melt_combined_game_stats$home_or_away == "Away",]
         
@@ -569,6 +573,8 @@ ui = fluidPage(
         titlePanel(h3("2021-2022", align = "center")),
         br(),
         column(3,
+          # selectInput("total_team_stats_season_user_selected", "Year:", choices=team_vars,
+          #             selected="goalsScored")
           selectInput("total_team_stats_x_user_selected", "X-axis:", choices=team_vars,
                       selected="goalsScored"),
           selectInput("total_team_stats_y_user_selected", "Y-axis:", choices=sort(unique(colnames(team_stats))),
@@ -584,7 +590,7 @@ ui = fluidPage(
                       formattableOutput("live_game_table", width = "100%"),
                       align="center", style='padding:1em;')),
              fluidRow(
-               column(3,
+               column(4,
                       selectInput("game_user_selected", "Select Game:", 
                                   choices=paste0(today_games$Home, " vs ", today_games$Away)))),
              fluidRow(style='padding-bottom: 1em',

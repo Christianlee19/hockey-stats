@@ -1,6 +1,9 @@
 library(ggplot2)
 library(ggpubr)
 library(ggrepel)
+library(data.table)
+
+setwd("~/Documents/hockey-stats/data/")
 
 ## load data
 print(load("draft_2000_2021.rsav"))
@@ -61,17 +64,17 @@ p0 = ggplot(gp_melt, aes(x = round, y = value, fill = variable)) +
   geom_bar(stat="identity", position="dodge", alpha=.85) +
   labs(x = "Draft Round", y = "% of Draft Picks", fill = "Cutoff",
        title="NHL Player Game Experience by Draft Round",
-       subtitle = "2000 - 2017 NHL Drafts") +
+       subtitle = "2000 - 2017 NHL Drafts\nn = 3779") +
   scale_y_continuous(breaks = breaks, labels = scales::percent(breaks)) +
-  scale_fill_manual(values=c("#4747ed","#de3131")) +
+  scale_fill_manual(values=c("#4747ed","#bcbcf5")) +
   theme_bw() +
-  theme(axis.text = element_text(size=11),
-        axis.title = element_text(size=12),
-        legend.text = element_text(size=10))
+  theme(axis.text = element_text(size=12),
+        axis.title = element_text(size=13),
+        legend.text = element_text(size=11))
 
 p0
 
-png("figures/070922_draft_picks_with_1_or_more_games_by_round.png", width=700, height=400)
+png("figures/071422_draft_picks_with_1_or_more_games_by_round.png", width=600, height=400)
   p0
 dev.off()
 

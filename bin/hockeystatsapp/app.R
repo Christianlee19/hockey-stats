@@ -9,6 +9,7 @@ library(plotly)
 library(RColorBrewer)
 library(formattable)
 library(ggpubr)
+# library(shinybrowser)
 
 
 ## ------------------------------------------------------------------------------------------------------------------------------
@@ -37,39 +38,54 @@ get_active_player_data = function(team_name, list_of_df){
 
 full_active_player_list = do.call(rbind, lapply(names(active_team_rosters_list), get_active_player_data, list_of_df=active_team_rosters_list))
 #dim(full_active_player_list)
-#[1] 832   5
+#[1] 832   5 (2022)
+#[1] 803   5 (23.02.19)
+
+
+# load list of skaters (created below) 
+skaters_to_select = readRDS("data/skaters_to_select.rds") # doing this b/c it takes to long to load all players
+
+# create season variable (eventually this will be replaced with a user-selected variable)
+season_end_to_use = as.numeric(gsub("(.+)-(.+)-(.+)", "\\1", Sys.Date()))
+title_season_to_use = as.character(paste(season_end_to_use-1, season_end_to_use, sep="-"))
+season_to_use = as.character(paste0(season_end_to_use-1, season_end_to_use))
+seasons_to_select_from = (season_end_to_use - 1):season_end_to_use
 
 
 ## ** DO NOT DELETE ** ##
+## use this to generate a list of top scorers and avoid slow steps
 #### player data ####
-# active_player_stats = nhl_players_seasons(playerIds=full_active_player_list$person.id[1:nrow(full_active_player_list)], seasons = "20212022")
-#
+# active_player_stats = nhl_players_seasons(playerIds=full_active_player_list$person.id[1:nrow(full_active_player_list)], seasons = season_to_use) #very slow
+# 
 # ## get name by id
 # active_player_stats = merge(active_player_stats, full_active_player_list, by.x="playerId", by.y="person.id")
-#
+# 
 # ## only keep players with n games
 # active_player_stats = active_player_stats[active_player_stats$stat.games > 10,,drop=F]
-#
+# 
 # ## get top n players by position
 # active_skater_stats = setDT(active_player_stats[active_player_stats$position.type != "Goalie",,drop=F])[order(-rank(stat.points))]
 # #test_goalie = setDT(test[test$position.type == "Goalie",,drop=F])[order(-rank(stat.savePercentage))]
-#
-# # skaters_to_select = unlist(strsplit(active_skater_stats_select$person.fullName, "' '"))
-# skaters_to_select = active_skater_stats[,.SD[1:20], by="position.type"]$person.fullName
-#saveRDS(skaters_to_select, file="~/Documents/hockey-stats/bin/hockeystatsapp/data/skaters_to_select.rds")
-
-skaters_to_select = readRDS("data/skaters_to_select.rds")
-
-season_to_use = as.numeric(gsub("(.+)-(.+)-(.+)", "\\1", Sys.Date()))
-season_to_use = as.character(paste0(season_to_use-1, season_to_use))
+# top50_forwards = active_skater_stats[active_skater_stats$position.type == "Forward",] %>% slice(1:50)
+# top25_defensemen = active_skater_stats[active_skater_stats$position.type == "Defenseman",] %>% slice(1:25)
+# skaters_to_select = rbind(top50_forwards, top25_defensemen) %>% select(playerId, person.fullName, team_name)
+#                       
+# # save  
+# saveRDS(skaters_to_select, file="~/Documents/hockey-stats/bin/hockeystatsapp/data/skaters_to_select.rds")
+# rm(top50_forwards, top25_defensemen, skaters_to_select)
 
 
 ## filter player data
-player_data = nhl_players_seasons(playerNames = skaters_to_select, seasons = season_to_use) ## maybe replace this with ids
-rownames(player_data) = skaters_to_select
+player_data = nhl_players_seasons(playerIds = skaters_to_select$playerId, seasons = season_to_use)
+rownames(player_data) = skaters_to_select$person.fullName
+player_data$person.fullName = skaters_to_select$person.fullName
 
 # clean column names
 colnames(player_data) = gsub("stat.", "", colnames(player_data))
+
+
+
+
 
 #### team data ####
 team_data = nhl_standings(
@@ -89,9 +105,15 @@ get_combined_team_stats = function(i, df){
 team_stats = do.call(rbind, lapply(1:length(team_data$teamRecords), get_combined_team_stats, team_data))
 # dim(team_stats)
 # [1]  32 10
-
+team_stats$divisionL10Rank = as.numeric(team_stats$divisionL10Rank)
+team_stats$divisionRank= as.character(team_stats$divisionRank) #leave this as character for team plot
+team_stats$leagueRank = as.numeric(team_stats$leagueRank)
 
 team_stats$division.name = active_team_roster_team_info$division.name[match(team_stats$team.name, active_team_roster_team_info$name)]
+rm(team_data)
+
+
+
 
 # basic player info [data frame of player name, id, and position]
 active_player_info = rbindlist(active_team_rosters_list)
@@ -109,6 +131,9 @@ team_vars = team_vars[!(team_vars %in% c("division.name","team.name"))]
 #   mutate(gameDate = ifelse(gameDate >= 1800, paste0(gameDate - 1700, "pm"), 
 #                            ifelse(gameDate < 1700, paste0(gameDate - 500, "am"), paste0(gameDate - 500, "pm")))) %>%
 #   mutate(gameDate = gsub("(.+)([0-9][0-9].+)", "\\1:\\2", gameDate))
+
+
+
 
 
 
@@ -131,7 +156,7 @@ if(today_schedule$totalGames >= 1){
   
 } else{
   ## get nearest date that is not current date
-  all_game_dates = as.Date(nhl_schedule_seasons(2021:2022)[[1]]$dates[[1]])
+  all_game_dates = as.Date(nhl_schedule_seasons((season_end_to_use-1):season_end_to_use)[[1]]$dates[[1]])
   all_game_dates = all_game_dates[all_game_dates != Sys.Date()]
   date_to_use = all_game_dates[which.min(abs(all_game_dates - Sys.Date()))]
 
@@ -156,6 +181,13 @@ today_games$Away = active_team_roster_team_info$teamName[match(today_games$Away,
 
 ## update today_games in case it is wrong
 # names(nhl_games_linescore(today_games$gamePk))
+
+
+
+
+
+
+
 
 
 ## ------------------------------------------------------------------------------------------------------------------------------
@@ -322,7 +354,88 @@ server = function(input, output) {
             legend.position = "bottom")
   })
 
+  
+  
+  #### bar plot ####
+  output$skater_bar_plot = renderPlot({
+    
+    data = player_data[1:15, c("points", "goals", "assists", "powerPlayPoints",
+                               "powerPlayGoals", "shortHandedPoints",
+                               "shots", "shotPct", "hits", "blocked",
+                               "plusMinus", "person.fullName")]
+    
+    metric_to_use = sym(input$metric_user_selected)
+    char_metric_to_use = as.character(input$metric_user_selected)
+    # upper_char_metric_to_use = paste0(toupper(substr(char_metric_to_use, 1, 1)), substr(char_metric_to_use, 2, nchar(char_metric_to_use)))
+    
+    data = data[order(data[[char_metric_to_use]], decreasing = T),]
+    data$person.fullName = factor(data$person.fullName, levels=rev(unique(data$person.fullName)))
+    
+    ggplot(data, aes(y = person.fullName, x = !!metric_to_use)) + 
+      geom_bar(stat = "identity", color = "#2f47bd", fill = "#D5DAF1", size=.65, width=.85) +
+      theme_bw() +
+      labs(x = char_metric_to_use, y = "skater") +
+      theme(title = element_text(size=10),
+            axis.text = element_text(size=14, color="gray10"),
+            axis.title = element_text(size=14))
+    
+  })
 
+  
+  #### small bar plots ####
+  output$skater_bar_plot_goals = renderPlot({
+    
+    data = player_data[1:5,]
+    data = data[order(data$goals, decreasing = T),]
+    data$person.fullName = factor(data$person.fullName, levels=unique(data$person.fullName))
+    
+    ggplot(data, aes(x = person.fullName, y = goals)) + 
+      geom_bar(stat = "identity", color = "#2f47bd", fill = "#D5DAF1", size=.65, width=.85) +
+      scale_x_discrete(guide = guide_axis(angle = 45)) +
+      theme_bw() +
+      labs(y = "goals", x = "skater") +
+      theme(title = element_text(size=10),
+            axis.text = element_text(size=14, color="gray10"),
+            axis.title.x = element_blank(),
+            axis.title = element_text(size=14))
+    
+  })
+  
+  output$skater_bar_plot_assists = renderPlot({
+    
+    data = player_data[1:5,]
+    data = data[order(data$assists, decreasing = T),]
+    data$person.fullName = factor(data$person.fullName, levels=unique(data$person.fullName))
+    
+    ggplot(data, aes(x = person.fullName, y = assists)) + 
+      geom_bar(stat = "identity", color = "#2f47bd", fill = "#D5DAF1", size=.65, width=.85) +
+      scale_x_discrete(guide = guide_axis(angle = 45)) +
+      theme_bw() +
+      labs(y = "assists", x = "skater") +
+      theme(title = element_text(size=10),
+            axis.text = element_text(size=14, color="gray10"),
+            axis.title.x = element_blank(),
+            axis.title = element_text(size=14))
+    
+  })
+  
+  output$skater_bar_plot_powerPlayPoints = renderPlot({
+    
+    data = player_data[1:5,]
+    data = data[order(data$powerPlayPoints, decreasing = T),]
+    data$person.fullName = factor(data$person.fullName, levels=unique(data$person.fullName))
+    
+    ggplot(data, aes(x = person.fullName, y = powerPlayPoints)) + 
+      geom_bar(stat = "identity", color = "#2f47bd", fill = "#D5DAF1", size=.65, width=.85) +
+      scale_x_discrete(guide = guide_axis(angle = 45)) +
+      theme_bw() +
+      labs(y = "power play points", x = "skater") +
+      theme(title = element_text(size=10),
+            axis.text = element_text(size=14, color="gray10"),
+            axis.title.x = element_blank(),
+            axis.title = element_text(size=14))
+    
+  })
 
 
   ## -----------------------------------------------------------------------------------
@@ -429,7 +542,7 @@ server = function(input, output) {
         #combined_game_stats$home_or_away = ifelse(combined_game_stats$team_name %in% data$Home, "Home", "Away")
         
         ## make data long to plot
-        melt_combined_game_stats = melt(setDT(combined_game_stats), measure.vars=c("points", "goals", "assists", "shots", "hits", "blocked", "plusMinus"), 
+        melt_combined_game_stats = reshape2::melt(setDT(combined_game_stats), measure.vars=c("points", "goals", "assists", "shots", "hits", "blocked", "plusMinus"), 
                     id.vars=c("player_name","type", "team_name", "home_or_away"))
         # melt_combined_game_stats$home_or_away = factor(melt_combined_game_stats$home_or_away, levels=c("Home", "Away"))
         
@@ -495,7 +608,7 @@ server = function(input, output) {
   #### Team plots ####
   get_cleaned_titles = function(i){return(tolower(gsub('([[:upper:]])', ' \\1', i)))}
 
-  output$teamPlot1 <- renderPlotly({
+  output$teamPlot1 = renderPlotly({
 
     ## get vars and cleaned titles
     testx = sym(input$total_team_stats_x_user_selected)
@@ -523,9 +636,59 @@ server = function(input, output) {
       )
     }
   )
+  
+  
+  ## team tile plot
+  ## TODO: create a scale for each variable for the alpha
+  
+  output$team_plot_tile = renderPlot({
+    
+    team_stats_tile = team_stats
+    team_stats_tile$leagueRank = as.numeric(team_stats_tile$leagueRank)
+    team_stats_tile = team_stats_tile[order(team_stats_tile$divisionRank, team_stats_tile$leagueRank),]
+    team_levels = unique(team_stats_tile$team.name)
+    
+    team_stats_melt = reshape2::melt(team_stats, id.vars = c("team.name","division.name"), measure.vars = c("divisionRank","leagueRank","gamesPlayed","points","regulationWins"))
+    team_stats_melt$team.name = factor(team_stats_melt$team.name, levels = rev(team_levels))
+    
+    team_stats_melt$value = as.numeric(team_stats_melt$value)
+    
+    ggplot(team_stats_melt, aes(y = team.name, x = variable, label = value, fill = variable)) +
+      geom_tile(color="white", size=0.35, alpha=.25) +
+      geom_text(size=4.25) +
+      theme_bw() +
+      labs(x = "Metric", y = "Team") +
+      # coord_flip() +
+      scale_fill_brewer(palette = "Set1") +
+      theme(
+        # strip.background = element_rect(fill="gray95", color="gray75"),
+        # strip.text = element_text(size=12, color="black"),
+        # panel.background = element_rect(fill = "white", color="gray75"),
+        axis.text = element_text(size=13, color="gray10"),
+        axis.text.x = element_text(angle=45, hjust=1, size=12),
+        axis.title = element_text(size=14),
+        legend.position = "none")
+  
+      
+      ## 02/19/2023 ** tried adding get_width but no plot was showing...
+      # ggplot(team_stats_melt, aes(y = team.name, x = variable, label = value, fill = variable)) +
+      #   geom_tile(color="white", size=0.35, alpha=.25) +
+      #   geom_text(size=4.25) +
+      #   theme_bw() +
+      #   labs(x = "Metric", y = "Team") +
+      #   coord_flip() +
+      #   scale_fill_brewer(palette = "Set1") +
+      #   # facet_wrap(~division.name, scale = "free") +
+      #   theme(
+      #     # strip.background = element_rect(fill="gray95", color="gray75"),
+      #     # strip.text = element_text(size=12, color="black"),
+      #     # panel.background = element_rect(fill = "white", color="gray75"),
+      #     axis.text = element_text(size=13, color="gray10"),
+      #     axis.text.x = element_text(angle=45, hjust=1, size=12),
+      #     axis.title = element_text(size=14),
+      #     legend.position = "none")
+  }, height=600) 
 }
-
-
 
 
 ## ------------------------------------------------------------------------------------------------------------------------------
@@ -536,51 +699,75 @@ ui = fluidPage(
              
 ## -------------------------------------------------------------------------        
     navbarMenu("Player Stats",
-      tabPanel("Season Totals",
+      tabPanel("Live Totals",
         fluidRow(
                titlePanel(h1("Live Totals", align = "center")),
                h4(textOutput("sktr_comparison"), align="center"),
                div(style='padding-top:1.25em;',
                column(3,
-                      selectInput("sktr_x_user_selected", "Player A:", choices=sort(skaters_to_select),
+                      selectInput("sktr_x_user_selected", "Player A:", choices=sort(skaters_to_select$person.fullName),
                                   selected="Connor McDavid"),
-                      selectInput("sktr_y_user_selected", "Player B:", choices=sort(skaters_to_select),
+                      selectInput("sktr_y_user_selected", "Player B:", choices=sort(skaters_to_select$person.fullName),
                                   selected="Auston Matthews"),
+                      # selectInput("season_user_selected", "Season", choices = paste0(seasons_to_select_from - 1, seasons_to_select_from)),
                       div(style="font-size:1.1rem",
                       "*Leauge leader corresponds to the max value from the above list of players.",
                       br(),
                       "pp = power play, sh = short handed.")),
                column(6, plotOutput("skaterPlot1")),
                column(3))),
+        
         br(),
         fluidRow(style='padding:1em 0 2em 0',
-          column(2, radioButtons("skater_table_norm", "Table Value Type", c("Season Total", "Per Game", "Per 60"))),
+          column(2, radioButtons("skater_table_norm", "Table Value Type:", c("Season Total", "Per Game", "Per 60"))),
           column(9, plotOutput("skater_lollipop_plot")),
           column(1))
         ),
 
-      tabPanel("League Leaders",
-               "Coming soon.")),
 
-      # tabPanel("Per game",
-      #           "Coming soon.")),
+      tabPanel("League Leaders",
+               fluidRow(style='padding:1em 0 2em 0',
+                        titlePanel(h1("League Leaders", align = "center")),
+                        h4("Top 15 Skaters By Metric", align="center"),
+                        div(style='padding-top:.75em;',
+                        column(2, selectInput("metric_user_selected", "Metric:", choices=c("points", "goals", "assists", "powerPlayPoints", "shortHandedPoints"),
+                                              selected="points")),
+                        column(9, plotOutput("skater_bar_plot")),
+                        column(1))),
+               fluidRow(
+                 titlePanel(h2("Overview", align = "center")),
+                 h4("Top 5 Skaters", align = "center"),
+                 column(4, style='padding:1.2em;',
+                        plotOutput("skater_bar_plot_goals")),
+                 column(4, style='padding:1.2em;',
+                        plotOutput("skater_bar_plot_assists")),
+                 column(4, style='padding:1.2em;',
+                        plotOutput("skater_bar_plot_powerPlayPoints"))))),
+               
 
     ## -------------------------------------------------------------------------
     navbarMenu("Team Stats",
       tabPanel("Season Totals",
       fluidRow(
         titlePanel(h1("Live Totals", align = "center")),
-        titlePanel(h3("2021-2022", align = "center")),
+        titlePanel(h3(title_season_to_use, align = "center")),
         br(),
         column(3,
           # selectInput("total_team_stats_season_user_selected", "Year:", choices=team_vars,
           #             selected="goalsScored")
-          selectInput("total_team_stats_x_user_selected", "X-axis:", choices=team_vars,
+          selectInput("total_team_stats_x_user_selected", "X-axis:", choices=team_vars[team_vars != "divisionRank"],
                       selected="goalsScored"),
-          selectInput("total_team_stats_y_user_selected", "Y-axis:", choices=sort(unique(colnames(team_stats))),
+          selectInput("total_team_stats_y_user_selected", "Y-axis:", choices=team_vars[team_vars != "divisionRank"],
                       selected="goalsAgainst")),
         column(8, plotlyOutput("teamPlot1")),
-        column(1)))),
+        column(1)),
+      
+      fluidRow(
+        div(style='padding-top:1.25em;',
+        titlePanel(h2("Rankings", align = "center")),
+        column(1),
+        column(10, plotOutput("team_plot_tile")),
+        column(1))))),
 
     ## -------------------------------------------------------------------------
     tabPanel("Live Games",
@@ -596,7 +783,8 @@ ui = fluidPage(
              fluidRow(style='padding-bottom: 1em',
                       column(8, offset=2, style='padding:0 1em', align="center",
                              verbatimTextOutput("live_game_message"),
-                             plotOutput("live_game_plot", height = "800px")))
+                             plotOutput("live_game_plot", height = "800px"))),
+             
     ),
 
     
